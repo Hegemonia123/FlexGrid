@@ -1,6 +1,5 @@
 // BUG: Restoring window after display change moves window outside screen.
 // TODO: Cascade each edge separately
-// TODO: Cascade when moving to another desktop
 
 
 
@@ -55,6 +54,7 @@ const defaultConfig = {
 
 const layoutSelections = {};
 const locations = {};
+const currentDesktops = {};
 const originalGeometeries = {};
 
 
@@ -169,23 +169,25 @@ const restore = (cli, restoreLocation) => {
         delete originalGeometeries[cli];
         delete locations[cli];
 
-        cascade(cli, location)
+        cascade(getDeskId(cli), location)
     }
 };
 
 
-const cascade = (client, location) =>
+const cascade = (deskId, location) => {
     workspace.clientList()
         .filter(cli => locations[cli]
             && getCascadeId(fitLocation(locations[cli], getGrid(cli))) === getCascadeId(location)
-            && getDeskId(cli) === getDeskId(client)
+            && getDeskId(cli) === deskId
         )
         .forEach((cli, idx, clis) => cli.frameGeometry = getGeometery(cli, fitLocation(locations[cli], getGrid(cli)), idx, clis.length));
+};
 
 
 const move = direction => () => {
     try {
         const cli = workspace.activeClient;
+        const deskId = getDeskId(cli);
 
         if (cli.moveable && cli.resizeable) { 
             if (!locations[cli]) {
@@ -196,18 +198,25 @@ const move = direction => () => {
                     width: cli.frameGeometry.width,
                     height: cli.frameGeometry.height
                 };
+                currentDesktops[cli] = deskId;
+                setBorder(cli);
 
                 cli.clientStartUserMovedResized.connect(() => restore(cli));
+                
+                cli.desktopChanged.connect(() => {
+                    cascade(currentDesktops[cli], locations[cli]);
+                    currentDesktops[cli] = getDeskId(cli);
+                    cascade(currentDesktops[cli], locations[cli]);
+                });
             }
-
-            setBorder(cli);
+            
             const previousLocation = locations[cli];
 
             const newLocation = getNewLocation(cli, direction);
             locations[cli] = newLocation;
-            cascade(cli, newLocation);
+            cascade(deskId, newLocation);
             
-            if (previousLocation && getGrid(cli).cascadeIndent) cascade(cli, previousLocation);
+            if (previousLocation && getGrid(cli).cascadeIndent) cascade(deskId, previousLocation);
         }
     } catch (error) {
         print('FlexGrid move error:', error);
@@ -220,7 +229,7 @@ const refit = deskId => {
     
     deskClis.forEach(setBorder);
 
-    deskClis.forEach(cli => cascade(cli, fitLocation(locations[cli], getGrid(cli))));
+    deskClis.forEach(cli => cascade(getDeskId(cli), fitLocation(locations[cli], getGrid(cli))));
 };
 
 
