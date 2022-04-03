@@ -1,12 +1,11 @@
 // BUG: Restoring window after display change moves window outside screen.
-// TODO: Cascade each edge separately
 
 
 
 /**
  * Grid layout configurations.
- * There must be at leas one configuration, but no upper limit exist.
- * The first one is used as default.
+ * There should be at least one configuration, but no upper limit exist.
+ * The first one is used by default before the layout have been switched manually.
  * 
  * vEdges and hEdges contain horizonal and vertical grid cell edges relative to screen.
  * Both arrays must contain at least two values, but no upper limit exist.
@@ -17,6 +16,21 @@
  * 
  * gap controls the space between windows (and screen edges).
  * The value is in pixels.
+ * 
+ * noBorder controls whether window frames should be removed.
+ * 
+ * cascadeIndent controls the indent size in cascade effect.
+ * The value is in pixels.
+ * 
+ * @example 
+ * // Even 2x2 grid without gaps, window frames and cascade effect.
+ * {
+ *      vEdges: [0, 0.5, 1],
+ *      hEdges: [0, 0.5, 1],
+ *      gap: 0,
+ *      noBorder: true,
+ *      cascadeIndent: 0,
+ * },
  */
 const layouts = [ 
     {
@@ -37,57 +51,38 @@ const layouts = [
         hEdges: [0, 0.70, 1],
         noBorder: true
     },
-    // { // Even 2x2 grid
-    //     vEdges: [0, 0.5, 1],
-    //     hEdges: [0, 0.5, 1],
-    //     gap: 0,
-    // },
 ];
 
 
+// Default parameters to be applied to every grid layout.
+// Default parameters are overridden by layout specific configuration.
 const defaultConfig = {
+    vEdges: [0, 0.5, 1],
+    hEdges: [0, 0.5, 1],
     gap: 0,
     cascadeIndent: 30,
     noBorder: false
 };
 
 
+// State containers
 const layoutSelections = {};
 const locations = {};
-const currentDesktops = {};
+// Contains previous deskop for each client, to be used for re-cascading the previous desktop after client has been moved to another.
+const previousDesktops = {}; 
 const originalGeometeries = {};
 
 
+// Helpers
 const getDeskId = cli => cli.screen + '_' + cli.desktop;
 
 const getGrid = cli => Object.assign({}, defaultConfig, layouts[layoutSelections[getDeskId(cli)]] || layouts[0]);
 
 const limit = (val, lower, upper) => Math.max(Math.min(val, upper), lower);
 
-const getCascadeId = location => location.slice(0, 3).join(';');
+const getCascadeId = (cli, location) => fitLocation(location, getGrid(cli)).slice(0, 3).join(';');
 
 const setBorder = cli => cli.noBorder = getGrid(cli).noBorder ?? false;
-
-
-/**
- * @param {AbstractClient} cli 
- * @param {number[]} [location=locations[cli]]
- * @param {number} cascadeIdx
- * @param {number} cascadeSize
- * @returns {QRect} Geometery
- */
-const getGeometery = (cli, [left, top, right, bottom] = locations[cli], cascadeIdx = 0, cascadeSize = 1) => {
-    const grid = getGrid(cli);
-    const maxArea = workspace.clientArea(KWin.MaximizeArea, cli);
-    
-    const x = maxArea.x + Math.round(grid.vEdges[left] * maxArea.width) + grid.gap * (left === 0 ? 2 : 1) + cascadeIdx * grid.cascadeIndent;
-    const y = maxArea.y + Math.round(grid.hEdges[top] * maxArea.height) + grid.gap * (top === 0 ? 2 : 1) + cascadeIdx * grid.cascadeIndent;
-    
-    const width = maxArea.x + Math.round(grid.vEdges[right] * maxArea.width) - x - grid.gap * (right === grid.vEdges.length - 1 ? 2 : 1) - (cascadeSize - cascadeIdx - 1) * grid.cascadeIndent;
-    const height = maxArea.y + Math.round(grid.hEdges[bottom] * maxArea.height) - y - grid.gap * (bottom === grid.hEdges.length - 1 ? 2 : 1) - (cascadeSize - cascadeIdx - 1) * grid.cascadeIndent;
-
-    return { x, y, width, height };
-};
 
 
 /**
@@ -128,7 +123,9 @@ const fitLocation = ([left, top, right, bottom], grid) => {
  * @returns {number[]} Mew location
  */
 const getNewLocation = (cli, direction) => {
-    let [left, top, right, bottom] = locations[cli] ?? getPreset(cli, direction);
+    if (!locations[cli]) return getPreset(cli, direction);
+
+    let [left, top, right, bottom] = locations[cli];
     const grid = getGrid(cli);
 
     // Cannot shrink -> back to preset location
@@ -168,19 +165,41 @@ const restore = (cli, restoreLocation) => {
 
         delete originalGeometeries[cli];
         delete locations[cli];
+        delete previousDesktop[cli];
 
         cascade(getDeskId(cli), location)
     }
 };
 
 
+/**
+ * @param {AbstractClient} cli 
+ * @param {number} cascadeIdx
+ * @param {number} cascadeLength
+ * @returns {QRect} Geometery
+ */
+const getGeometery = (cli, cascadeIdx, cascadeLength) => {
+    const grid = getGrid(cli);
+    let [left, top, right, bottom] = fitLocation(locations[cli], grid);
+    const maxArea = workspace.clientArea(KWin.MaximizeArea, cli);
+
+    const x = maxArea.x + Math.round(grid.vEdges[left] * maxArea.width) + grid.gap * (left === 0 ? 2 : 1) + cascadeIdx * grid.cascadeIndent;
+    const y = maxArea.y + Math.round(grid.hEdges[top] * maxArea.height) + grid.gap * (top === 0 ? 2 : 1) + cascadeIdx * grid.cascadeIndent;
+
+    const width = maxArea.x + Math.round(grid.vEdges[right] * maxArea.width) - x - grid.gap * (right === grid.vEdges.length - 1 ? 2 : 1) - (cascadeLength - cascadeIdx - 1) * grid.cascadeIndent;
+    const height = maxArea.y + Math.round(grid.hEdges[bottom] * maxArea.height) - y - grid.gap * (bottom === grid.hEdges.length - 1 ? 2 : 1) - (cascadeLength - cascadeIdx - 1) * grid.cascadeIndent;
+
+    return { x, y, width, height };
+};
+
+
 const cascade = (deskId, location) => {
     workspace.clientList()
         .filter(cli => locations[cli]
-            && getCascadeId(fitLocation(locations[cli], getGrid(cli))) === getCascadeId(location)
             && getDeskId(cli) === deskId
+            && getCascadeId(cli, locations[cli]) === getCascadeId(cli, location)
         )
-        .forEach((cli, idx, clis) => cli.frameGeometry = getGeometery(cli, fitLocation(locations[cli], getGrid(cli)), idx, clis.length));
+        .forEach((cli, idx, clis) => cli.frameGeometry = getGeometery(cli, idx, clis.length));
 };
 
 
@@ -198,15 +217,16 @@ const move = direction => () => {
                     width: cli.frameGeometry.width,
                     height: cli.frameGeometry.height
                 };
-                currentDesktops[cli] = deskId;
+                previousDesktop[cli] = deskId;
                 setBorder(cli);
 
                 cli.clientStartUserMovedResized.connect(() => restore(cli));
                 
                 cli.desktopChanged.connect(() => {
-                    cascade(currentDesktops[cli], locations[cli]);
-                    currentDesktops[cli] = getDeskId(cli);
-                    cascade(currentDesktops[cli], locations[cli]);
+                    cascade(previousDesktop[cli], locations[cli]);
+                    previousDesktop[cli] = getDeskId(cli);
+                    cascade(previousDesktop[cli], locations[cli]);
+                    setBorder(cli);
                 });
             }
             
@@ -229,7 +249,7 @@ const refit = deskId => {
     
     deskClis.forEach(setBorder);
 
-    deskClis.forEach(cli => cascade(getDeskId(cli), fitLocation(locations[cli], getGrid(cli))));
+    deskClis.forEach(cli => cascade(getDeskId(cli), locations[cli]));
 };
 
 
