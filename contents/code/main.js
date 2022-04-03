@@ -1,7 +1,3 @@
-// BUG: Restoring window after display change moves window outside screen.
-
-
-
 /**
  * Grid layout configurations.
  * There is no upper limit for the number of layouts.
@@ -144,6 +140,8 @@ const getNewPosition = (cli, direction) => {
 };
 
 
+const SCREEN_FITTING_TOLERANCE = 50;
+
 /**
  * 
  * @param {AbstractClient} cli 
@@ -151,14 +149,19 @@ const getNewPosition = (cli, direction) => {
  */
 const restore = (cli, restorePosition) => {
     if (cli in positions) {
-        if (restorePosition)
+        const { x, y, width, height } = originalGeometeries[cli];
+        if (restorePosition 
+            && x + width <= workspace.virtualScreenSize.width + SCREEN_FITTING_TOLERANCE
+            && y + height <= workspace.virtualScreenSize.height + SCREEN_FITTING_TOLERANCE
+        ) {
             cli.frameGeometry = originalGeometeries[cli];
-        else 
-            // Restore only window size
+        }
+        else { // Restore only window size
             cli.frameGeometry = {
                 height: originalGeometeries[cli].height,
                 width: originalGeometeries[cli].width
             };
+        }
         
         const position = positions[cli];
         cli.noBorder = false;
