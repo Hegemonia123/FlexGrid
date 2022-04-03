@@ -66,7 +66,7 @@ const layoutSelections = {};
 const positions = {};
 // Contains previous deskop for each client, to be used for re-cascading the previous desktop after client has been moved to another.
 const previousDesktops = {}; 
-const originalGeometeries = {};
+const originalGeometries = {};
 
 
 // Helpers
@@ -149,7 +149,7 @@ const restore = (cli, restorePosition) => {
     if (cli in positions) {
         // Resize to fit the screen area, because screen may have been changed after tiling started.
         const maxArea = workspace.clientArea(KWin.MaximizeArea, cli);
-        let { x, y, width, height } = originalGeometeries[cli];
+        let { x, y, width, height } = originalGeometries[cli];
         width = limit(width, cli.minSize.width, maxArea.width);
         height = limit(height, cli.minSize.height, maxArea.height);
 
@@ -166,7 +166,7 @@ const restore = (cli, restorePosition) => {
         const position = positions[cli];
         cli.noBorder = false;
 
-        delete originalGeometeries[cli];
+        delete originalGeometries[cli];
         delete positions[cli];
         delete previousDesktops[cli];
 
@@ -179,9 +179,9 @@ const restore = (cli, restorePosition) => {
  * @param {AbstractClient} cli 
  * @param {number} cascadeIdx
  * @param {number} cascadeLength
- * @returns {QRect} Geometery
+ * @returns {QRect} Geometry
  */
-const getGeometery = (cli, cascadeIdx, cascadeLength) => {
+const getGeometry = (cli, cascadeIdx, cascadeLength) => {
     const layout = getLayout(cli);
     let [left, top, right, bottom] = fitPosition(positions[cli], layout);
     const maxArea = workspace.clientArea(KWin.MaximizeArea, cli);
@@ -202,7 +202,7 @@ const cascade = (deskId, position) => {
             && getDeskId(cli) === deskId
             && getCascadeId(cli, positions[cli]) === getCascadeId(cli, position)
         )
-        .forEach((cli, idx, clis) => cli.frameGeometry = getGeometery(cli, idx, clis.length));
+        .forEach((cli, idx, clis) => cli.frameGeometry = getGeometry(cli, idx, clis.length));
 };
 
 
@@ -213,8 +213,8 @@ const move = direction => () => {
         
         if (cli.moveable && cli.resizeable && !cli.specialWindow && !cli.transient) { 
             if (!positions[cli]) {
-                // Copy properties instead of reference to geometery object
-                originalGeometeries[cli] = {
+                // Copy properties instead of reference to geometry object
+                originalGeometries[cli] = {
                     x: cli.frameGeometry.x,
                     y: cli.frameGeometry.y,
                     width: cli.frameGeometry.width,
