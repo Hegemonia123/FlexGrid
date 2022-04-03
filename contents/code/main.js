@@ -211,7 +211,7 @@ const move = direction => () => {
         const cli = workspace.activeClient;
         const deskId = getDeskId(cli);
 
-        if (cli.moveable && cli.resizeable) { 
+        if (cli.moveable && cli.resizeable && !cli.specialWindow && !cli.transient) { 
             if (!positions[cli]) {
                 // Copy properties instead of reference to geometery object
                 originalGeometeries[cli] = {
