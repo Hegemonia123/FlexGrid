@@ -7,6 +7,7 @@ X-KDE-PluginInfo-Author=Hegemonia
 X-KDE-PluginInfo-Email=username@gmail.com
 X-KDE-PluginInfo-Name=flexGrid
 X-KDE-PluginInfo-Version=1.0
+X-KDE-PluginInfo-EnabledByDefault=true
 X-KDE-PluginInfo-License=GPL
 
 Type=Service
