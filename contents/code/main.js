@@ -4,7 +4,7 @@
 
 /**
  * Grid layout configurations.
- * There should be at least one configuration, but no upper limit exist.
+ * There is no upper limit for the number of layouts.
  * The first one is used by default before the layout have been switched manually.
  * 
  * vEdges and hEdges contain horizonal and vertical grid cell edges relative to screen.
@@ -23,7 +23,7 @@
  * The value is in pixels.
  * 
  * @example 
- * // Even 2x2 grid without gaps, window frames and cascade effect.
+ * // Even 2x2 layout without gaps, window frames and cascade effect.
  * {
  *      vEdges: [0, 0.5, 1],
  *      hEdges: [0, 0.5, 1],
@@ -54,9 +54,9 @@ const layouts = [
 ];
 
 
-// Default parameters to be applied to every grid layout.
+// Default parameters to be applied to every layout.
 // Default parameters are overridden by layout specific configuration.
-const defaultConfig = {
+const defaultLayoutParams = {
     vEdges: [0, 0.5, 1],
     hEdges: [0, 0.5, 1],
     gap: 0,
@@ -67,7 +67,7 @@ const defaultConfig = {
 
 // State containers
 const layoutSelections = {};
-const locations = {};
+const positions = {};
 // Contains previous deskop for each client, to be used for re-cascading the previous desktop after client has been moved to another.
 const previousDesktops = {}; 
 const originalGeometeries = {};
@@ -76,43 +76,43 @@ const originalGeometeries = {};
 // Helpers
 const getDeskId = cli => cli.screen + '_' + cli.desktop;
 
-const getGrid = cli => Object.assign({}, defaultConfig, layouts[layoutSelections[getDeskId(cli)]] || layouts[0]);
+const getLayout = cli => Object.assign({}, defaultLayoutParams, layouts[layoutSelections[getDeskId(cli)]] || layouts[0]);
 
 const limit = (val, lower, upper) => Math.max(Math.min(val, upper), lower);
 
-const getCascadeId = (cli, location) => fitLocation(location, getGrid(cli)).slice(0, 3).join(';');
+const getCascadeId = (cli, position) => fitPosition(position, getLayout(cli)).slice(0, 3).join(';');
 
-const setBorder = cli => cli.noBorder = getGrid(cli).noBorder ?? false;
+const setBorder = cli => cli.noBorder = getLayout(cli).noBorder ?? false;
+
+
+/**
+ * @description Force cell boundaries within grid
+ * @param {number[]} position
+ * @param {Object} layout 
+ */
+const fitPosition = ([left, top, right, bottom], layout) => {
+    left = limit(left, 0, layout.vEdges.length - 2);
+    right = limit(right, 1, layout.vEdges.length - 1);
+    top = limit(top, 0, layout.hEdges.length - 2);
+    bottom = limit(bottom, 1, layout.hEdges.length - 1);
+
+    return [left, top, right, bottom];
+};
 
 
 /**
  * @param {AbstractClient} cli 
  * @param {'right'|'left'|'up'|'down'} direction 
- * @returns {number[]} Preconfigured starting location
+ * @returns {number[]} Preconfigured starting position
  */
 const getPreset = (cli, direction) => {
-    const grid = getGrid(cli);
+    const layout = getLayout(cli);
     switch (direction) {
-        case 'left': return [0, 0, 1, grid.hEdges.length - 1];
-        case 'right': return [grid.vEdges.length - 2, 0, grid.vEdges.length - 1, grid.hEdges.length - 1];
-        case 'up': return [0, 0, grid.vEdges.length - 1, grid.hEdges.length - 1] // Maximized;
-        case 'down': return [0, grid.hEdges.length - 2, grid.vEdges.length - 1, grid.hEdges.length - 1];
+        case 'left': return [0, 0, 1, layout.hEdges.length - 1];
+        case 'right': return [layout.vEdges.length - 2, 0, layout.vEdges.length - 1, layout.hEdges.length - 1];
+        case 'up': return [0, 0, layout.vEdges.length - 1, layout.hEdges.length - 1] // Maximized;
+        case 'down': return [0, layout.hEdges.length - 2, layout.vEdges.length - 1, layout.hEdges.length - 1];
     }
-};
-
-
-/**
- * @description Force cell boundaries within grid
- * @param {number[]} location
- * @param {Object} grid 
- */
-const fitLocation = ([left, top, right, bottom], grid) => {
-    left = limit(left, 0, grid.vEdges.length - 2);
-    right = limit(right, 1, grid.vEdges.length - 1);
-    top = limit(top, 0, grid.hEdges.length - 2);
-    bottom = limit(bottom, 1, grid.hEdges.length - 1);
-
-    return [left, top, right, bottom];
 };
 
 
@@ -120,19 +120,19 @@ const fitLocation = ([left, top, right, bottom], grid) => {
 /**
  * @param {AbstractClient} cli 
  * @param {'right'|'left'|'up'|'down'} direction
- * @returns {number[]} Mew location
+ * @returns {number[]} Mew position
  */
-const getNewLocation = (cli, direction) => {
-    if (!locations[cli]) return getPreset(cli, direction);
+const getNewPosition = (cli, direction) => {
+    if (!positions[cli]) return getPreset(cli, direction);
 
-    let [left, top, right, bottom] = locations[cli];
-    const grid = getGrid(cli);
+    let [left, top, right, bottom] = positions[cli];
+    const layout = getLayout(cli);
 
-    // Cannot shrink -> back to preset location
-    if (direction === 'right' && left === grid.vEdges.length - 2) return getPreset(cli, 'right');
+    // Cannot shrink -> back to preset position
+    if (direction === 'right' && left === layout.vEdges.length - 2) return getPreset(cli, 'right');
     if (direction === 'left' && right === 1) return getPreset(cli, 'left');
     if (direction === 'up' && bottom === 1) return getPreset(cli, 'up');
-    if (direction === 'down' && top === grid.hEdges.length - 2) return getPreset(cli, 'down');
+    if (direction === 'down' && top === layout.hEdges.length - 2) return getPreset(cli, 'down');
 
     // Shrink
     if (direction === 'right') { left++; right++; }
@@ -140,18 +140,18 @@ const getNewLocation = (cli, direction) => {
     if (direction === 'up') { top--; bottom--; }
     if (direction === 'down') { top++; bottom++; }
 
-    return fitLocation([left, top, right, bottom], grid);
+    return fitPosition([left, top, right, bottom], layout);
 };
 
 
 /**
  * 
  * @param {AbstractClient} cli 
- * @param {boolean} restoreLocation - Restore also location in addition to size
+ * @param {boolean} restorePosition - Restore also position in addition to size
  */
-const restore = (cli, restoreLocation) => {
-    if (cli in locations) {
-        if (restoreLocation)
+const restore = (cli, restorePosition) => {
+    if (cli in positions) {
+        if (restorePosition)
             cli.frameGeometry = originalGeometeries[cli];
         else 
             // Restore only window size
@@ -160,14 +160,14 @@ const restore = (cli, restoreLocation) => {
                 width: originalGeometeries[cli].width
             };
         
-        const location = locations[cli];
+        const position = positions[cli];
         cli.noBorder = false;
 
         delete originalGeometeries[cli];
-        delete locations[cli];
+        delete positions[cli];
         delete previousDesktops[cli];
 
-        cascade(getDeskId(cli), location)
+        cascade(getDeskId(cli), position)
     }
 };
 
@@ -179,25 +179,25 @@ const restore = (cli, restoreLocation) => {
  * @returns {QRect} Geometery
  */
 const getGeometery = (cli, cascadeIdx, cascadeLength) => {
-    const grid = getGrid(cli);
-    let [left, top, right, bottom] = fitLocation(locations[cli], grid);
+    const layout = getLayout(cli);
+    let [left, top, right, bottom] = fitPosition(positions[cli], layout);
     const maxArea = workspace.clientArea(KWin.MaximizeArea, cli);
 
-    const x = maxArea.x + Math.round(grid.vEdges[left] * maxArea.width) + grid.gap * (left === 0 ? 2 : 1) + cascadeIdx * grid.cascadeIndent;
-    const y = maxArea.y + Math.round(grid.hEdges[top] * maxArea.height) + grid.gap * (top === 0 ? 2 : 1) + cascadeIdx * grid.cascadeIndent;
+    const x = maxArea.x + Math.round(layout.vEdges[left] * maxArea.width) + layout.gap * (left === 0 ? 2 : 1) + cascadeIdx * layout.cascadeIndent;
+    const y = maxArea.y + Math.round(layout.hEdges[top] * maxArea.height) + layout.gap * (top === 0 ? 2 : 1) + cascadeIdx * layout.cascadeIndent;
 
-    const width = maxArea.x + Math.round(grid.vEdges[right] * maxArea.width) - x - grid.gap * (right === grid.vEdges.length - 1 ? 2 : 1) - (cascadeLength - cascadeIdx - 1) * grid.cascadeIndent;
-    const height = maxArea.y + Math.round(grid.hEdges[bottom] * maxArea.height) - y - grid.gap * (bottom === grid.hEdges.length - 1 ? 2 : 1) - (cascadeLength - cascadeIdx - 1) * grid.cascadeIndent;
+    const width = maxArea.x + Math.round(layout.vEdges[right] * maxArea.width) - x - layout.gap * (right === layout.vEdges.length - 1 ? 2 : 1) - (cascadeLength - cascadeIdx - 1) * layout.cascadeIndent;
+    const height = maxArea.y + Math.round(layout.hEdges[bottom] * maxArea.height) - y - layout.gap * (bottom === layout.hEdges.length - 1 ? 2 : 1) - (cascadeLength - cascadeIdx - 1) * layout.cascadeIndent;
 
     return { x, y, width, height };
 };
 
 
-const cascade = (deskId, location) => {
+const cascade = (deskId, position) => {
     workspace.clientList()
-        .filter(cli => locations[cli]
+        .filter(cli => positions[cli]
             && getDeskId(cli) === deskId
-            && getCascadeId(cli, locations[cli]) === getCascadeId(cli, location)
+            && getCascadeId(cli, positions[cli]) === getCascadeId(cli, position)
         )
         .forEach((cli, idx, clis) => cli.frameGeometry = getGeometery(cli, idx, clis.length));
 };
@@ -209,7 +209,7 @@ const move = direction => () => {
         const deskId = getDeskId(cli);
 
         if (cli.moveable && cli.resizeable) { 
-            if (!locations[cli]) {
+            if (!positions[cli]) {
                 // Copy properties instead of reference to geometery object
                 originalGeometeries[cli] = {
                     x: cli.frameGeometry.x,
@@ -223,20 +223,20 @@ const move = direction => () => {
                 cli.clientStartUserMovedResized.connect(() => restore(cli));
                 
                 cli.desktopChanged.connect(() => {
-                    cascade(previousDesktops[cli], locations[cli]);
+                    cascade(previousDesktops[cli], positions[cli]);
                     previousDesktops[cli] = getDeskId(cli);
-                    cascade(previousDesktops[cli], locations[cli]);
+                    cascade(previousDesktops[cli], positions[cli]);
                     setBorder(cli);
                 });
             }
             
-            const previousLocation = locations[cli];
+            const previousPosition = positions[cli];
 
-            const newLocation = getNewLocation(cli, direction);
-            locations[cli] = newLocation;
-            cascade(deskId, newLocation);
+            const newPosition = getNewPosition(cli, direction);
+            positions[cli] = newPosition;
+            cascade(deskId, newPosition);
             
-            if (previousLocation && getGrid(cli).cascadeIndent) cascade(deskId, previousLocation);
+            if (previousPosition && getLayout(cli).cascadeIndent) cascade(deskId, previousPosition);
         }
     } catch (error) {
         print('FlexGrid move error:', error);
@@ -245,15 +245,15 @@ const move = direction => () => {
 
 
 const refit = deskId => {
-    const deskClis = workspace.clientList().filter(cli => cli in locations && (!deskId || getDeskId(cli) === deskId));
+    const deskClis = workspace.clientList().filter(cli => cli in positions && (!deskId || getDeskId(cli) === deskId));
     
     deskClis.forEach(setBorder);
 
-    deskClis.forEach(cli => cascade(getDeskId(cli), locations[cli]));
+    deskClis.forEach(cli => cascade(getDeskId(cli), positions[cli]));
 };
 
 
-const switchGrid = direction => () => {
+const switchLayout = direction => () => {
     try {
         const deskId = getDeskId(workspace.activeClient);
         
@@ -262,7 +262,7 @@ const switchGrid = direction => () => {
 
         refit(deskId);
     } catch (error) {
-        print('FlexGrid switchGrid error:', error);
+        print('FlexGrid switchLayout error:', error);
     }
 };
 
@@ -272,8 +272,8 @@ registerShortcut("FlexGridMoveLeft", "FlexGrid: Move Window left", "Meta+Left", 
 registerShortcut("FlexGridMoveUp", "FlexGrid: Move Window up", "Meta+Up", move('up'));
 registerShortcut("FlexGridMoveDown", "FlexGrid: Move Window down", "Meta+Down", move('down'));
 
-registerShortcut("FlexGridNextGrid2", "FlexGrid: Next grid", "Meta+Ctrl+Right", switchGrid('next'));
-registerShortcut("FlexGridPreviousGrid2", "FlexGrid: Previous grid", "Meta+Ctrl+Left", switchGrid('prev'));
+registerShortcut("FlexGridNextLayout", "FlexGrid: Next layout", "Meta+Ctrl+Right", switchLayout('next'));
+registerShortcut("FlexGridPreviousLayout", "FlexGrid: Previous layout", "Meta+Ctrl+Left", switchLayout('prev'));
 
 registerShortcut("FlexGridRestore", "FlexGrid: Restore", "Meta+end", () => restore(workspace.activeClient, true));
 
