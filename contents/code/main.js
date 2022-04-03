@@ -165,7 +165,7 @@ const restore = (cli, restoreLocation) => {
 
         delete originalGeometeries[cli];
         delete locations[cli];
-        delete previousDesktop[cli];
+        delete previousDesktops[cli];
 
         cascade(getDeskId(cli), location)
     }
@@ -217,15 +217,15 @@ const move = direction => () => {
                     width: cli.frameGeometry.width,
                     height: cli.frameGeometry.height
                 };
-                previousDesktop[cli] = deskId;
+                previousDesktops[cli] = deskId;
                 setBorder(cli);
 
                 cli.clientStartUserMovedResized.connect(() => restore(cli));
                 
                 cli.desktopChanged.connect(() => {
-                    cascade(previousDesktop[cli], locations[cli]);
-                    previousDesktop[cli] = getDeskId(cli);
-                    cascade(previousDesktop[cli], locations[cli]);
+                    cascade(previousDesktops[cli], locations[cli]);
+                    previousDesktops[cli] = getDeskId(cli);
+                    cascade(previousDesktops[cli], locations[cli]);
                     setBorder(cli);
                 });
             }
