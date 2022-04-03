@@ -70,7 +70,7 @@ const originalGeometeries = {};
 
 
 // Helpers
-const getDeskId = cli => cli.screen + '_' + cli.desktop;
+const getDeskId = cli => cli.screen + ';' + cli.desktop + ';' + cli.activities;
 
 const getLayout = cli => Object.assign({}, defaultLayoutParams, layouts[layoutSelections[getDeskId(cli)]] || layouts[0]);
 
@@ -210,7 +210,7 @@ const move = direction => () => {
     try {
         const cli = workspace.activeClient;
         const deskId = getDeskId(cli);
-
+        
         if (cli.moveable && cli.resizeable && !cli.specialWindow && !cli.transient) { 
             if (!positions[cli]) {
                 // Copy properties instead of reference to geometery object
