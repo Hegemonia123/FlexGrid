@@ -70,7 +70,7 @@ const originalGeometries = {};
 
 
 // Helpers
-const getDeskId = cli => cli.screen + ';' + cli.desktop + ';' + cli.activities;
+const getDeskId = cli => cli.screen + ';' + cli.desktop + ';' + (cli.activities.length ? cli.activities : workspace.activities);
 
 const getLayout = cli => Object.assign({}, defaultLayoutParams, layouts[layoutSelections[getDeskId(cli)]] || layouts[0]);
 
