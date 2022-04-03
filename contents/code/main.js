@@ -140,8 +140,6 @@ const getNewPosition = (cli, direction) => {
 };
 
 
-const SCREEN_FITTING_TOLERANCE = 50;
-
 /**
  * 
  * @param {AbstractClient} cli 
@@ -149,12 +147,20 @@ const SCREEN_FITTING_TOLERANCE = 50;
  */
 const restore = (cli, restorePosition) => {
     if (cli in positions) {
-        const { x, y, width, height } = originalGeometeries[cli];
-        if (restorePosition 
-            && x + width <= workspace.virtualScreenSize.width + SCREEN_FITTING_TOLERANCE
-            && y + height <= workspace.virtualScreenSize.height + SCREEN_FITTING_TOLERANCE
-        ) {
-            cli.frameGeometry = originalGeometeries[cli];
+        if (restorePosition) {
+            // Refit to screen area, because screen may have been changed after tiling started.
+            const maxArea = workspace.clientArea(KWin.MaximizeArea, cli);
+            
+            let { x, y, width, height } = originalGeometeries[cli];
+            width = limit(width, cli.minSize.width, maxArea.width);
+            height = limit(height, cli.minSize.height, maxArea.height);
+
+            cli.frameGeometry = {
+                x: limit(x, maxArea.x, maxArea.width - width),
+                y: limit(y, maxArea.y, maxArea.height - height),
+                width,
+                height
+            };
         }
         else { // Restore only window size
             cli.frameGeometry = {
