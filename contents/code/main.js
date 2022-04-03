@@ -147,27 +147,21 @@ const getNewPosition = (cli, direction) => {
  */
 const restore = (cli, restorePosition) => {
     if (cli in positions) {
-        if (restorePosition) {
-            // Refit to screen area, because screen may have been changed after tiling started.
-            const maxArea = workspace.clientArea(KWin.MaximizeArea, cli);
-            
-            let { x, y, width, height } = originalGeometeries[cli];
-            width = limit(width, cli.minSize.width, maxArea.width);
-            height = limit(height, cli.minSize.height, maxArea.height);
+        // Resize to fit the screen area, because screen may have been changed after tiling started.
+        const maxArea = workspace.clientArea(KWin.MaximizeArea, cli);
+        let { x, y, width, height } = originalGeometeries[cli];
+        width = limit(width, cli.minSize.width, maxArea.width);
+        height = limit(height, cli.minSize.height, maxArea.height);
 
+        if (restorePosition)
             cli.frameGeometry = {
                 x: limit(x, maxArea.x, maxArea.width - width),
                 y: limit(y, maxArea.y, maxArea.height - height),
                 width,
                 height
             };
-        }
-        else { // Restore only window size
-            cli.frameGeometry = {
-                height: originalGeometeries[cli].height,
-                width: originalGeometeries[cli].width
-            };
-        }
+        else // Restore only window size
+            cli.frameGeometry = { height, width };
         
         const position = positions[cli];
         cli.noBorder = false;
