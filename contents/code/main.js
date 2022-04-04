@@ -18,6 +18,10 @@
  * cascadeIndent controls the indent size in cascade effect.
  * The value is in pixels.
  * 
+ * ignore must be a fuction that takes window (client) as a parameter and returns 
+ * boolean indicating whether the grid command should be ignored or not. 
+ * 
+ * 
  * @example 
  * // Even 2x2 layout without gaps, window frames and cascade effect.
  * {
@@ -57,7 +61,15 @@ const defaultLayoutParams = {
     hEdges: [0, 0.5, 1],
     gap: 0,
     cascadeIndent: 30,
-    noBorder: false
+    noBorder: false,
+    ignore: cli => !cli.normalWindow
+    /**
+     * Examples:
+    ignore: cli => !cli.normalWindow || !cli.moveable || !cli.resizeable || cli.specialWindow || cli.transient // More failproof
+    ignore: cli => cli.desktopWindow || cli.dock || cli.resourceClass == 'plasmashell'
+    ignore: cli => !cli.normalWindow || cli.resourceClass == 'firefox' // Added app specific rule
+    ignore: cli => !cli.normalWindow || (cli.windowRole == 'browser' && cli.resourceClass == 'firefox' && cli.resourceName == 'navigator') // Added window specific rule
+     */
 };
 
 
@@ -210,8 +222,9 @@ const move = direction => () => {
     try {
         const cli = workspace.activeClient;
         const deskId = getDeskId(cli);
-        
-        if (cli.moveable && cli.resizeable && !cli.specialWindow && !cli.transient) { 
+        const layout = getLayout(cli);
+
+        if (!layout.ignore(cli)) { 
             if (!positions[cli]) {
                 // Copy properties instead of reference to geometry object
                 originalGeometries[cli] = {
@@ -239,7 +252,7 @@ const move = direction => () => {
             positions[cli] = newPosition;
             cascade(deskId, newPosition);
             
-            if (previousPosition && getLayout(cli).cascadeIndent) cascade(deskId, previousPosition);
+            if (previousPosition && layout.cascadeIndent) cascade(deskId, previousPosition);
         }
     } catch (error) {
         print('FlexGrid move error:', error);
