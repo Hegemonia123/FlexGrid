@@ -78,7 +78,7 @@ const layoutSelections = {};
 const positions = {};
 // Contains previous deskop for each client, to be used for re-cascading the previous desktop after client has been moved to another.
 const previousDesktops = {}; 
-const originalGeometries = {};
+const originalState = {};
 
 
 // Helpers
@@ -90,7 +90,7 @@ const limit = (val, lower, upper) => Math.max(Math.min(val, upper), lower);
 
 const getCascadeId = (cli, position) => fitPosition(position, getLayout(cli)).slice(0, 3).join(';');
 
-const setBorder = cli => cli.noBorder = getLayout(cli).noBorder ?? false;
+const setBorder = cli => cli.noBorder = originalState[cli].noBorder || getLayout(cli).noBorder || false;
 
 
 /**
@@ -118,7 +118,7 @@ const getPreset = (cli, direction) => {
     switch (direction) {
         case 'left': return [0, 0, 1, layout.hEdges.length - 1];
         case 'right': return [layout.vEdges.length - 2, 0, layout.vEdges.length - 1, layout.hEdges.length - 1];
-        case 'up': return [0, 0, layout.vEdges.length - 1, layout.hEdges.length - 1] // Maximized;
+        case 'up': return [0, 0, layout.vEdges.length - 1, layout.hEdges.length - 1] // "Maximized";
         case 'down': return [0, layout.hEdges.length - 2, layout.vEdges.length - 1, layout.hEdges.length - 1];
     }
 };
@@ -131,9 +131,15 @@ const getPreset = (cli, direction) => {
  * @returns {number[]} Mew position
  */
 const getNewPosition = (cli, direction) => {
-    if (!positions[cli]) return getPreset(cli, direction);
+    let position = positions[cli];
 
-    let [left, top, right, bottom] = positions[cli];
+    if (!position && (cli.fullScreen || cli.frameGeometry == workspace.clientArea(KWin.MaximizeArea, cli))) {
+        position = getPreset(cli, 'up');
+    }
+
+    if (!position) return getPreset(cli, direction);
+
+    let [left, top, right, bottom] = position;
     const layout = getLayout(cli);
 
     // Cannot shrink -> back to preset position
@@ -161,7 +167,7 @@ const restore = (cli, restorePosition) => {
     if (cli in positions) {
         // Resize to fit the screen area, because screen may have been changed after tiling started.
         const maxArea = workspace.clientArea(KWin.MaximizeArea, cli);
-        let { x, y, width, height } = originalGeometries[cli];
+        let { x, y, width, height, fullScreen, noBorder } = originalState[cli];
         width = limit(width, cli.minSize.width, maxArea.width);
         height = limit(height, cli.minSize.height, maxArea.height);
 
@@ -174,11 +180,16 @@ const restore = (cli, restorePosition) => {
             };
         else // Restore only window size
             cli.frameGeometry = { height, width };
-        
-        const position = positions[cli];
-        cli.noBorder = false;
 
-        delete originalGeometries[cli];
+        const position = positions[cli];
+        cli.noBorder = noBorder;
+        if (fullScreen) {
+            // Dirty hack: Otherwise panels remain visible.
+            cli.fullScreen = false;
+            cli.fullScreen = true;
+        }
+
+        delete originalState[cli];
         delete positions[cli];
         delete previousDesktops[cli];
 
@@ -227,11 +238,13 @@ const move = direction => () => {
         if (!layout.ignore(cli)) { 
             if (!positions[cli]) {
                 // Copy properties instead of reference to geometry object
-                originalGeometries[cli] = {
+                originalState[cli] = {
                     x: cli.frameGeometry.x,
                     y: cli.frameGeometry.y,
                     width: cli.frameGeometry.width,
-                    height: cli.frameGeometry.height
+                    height: cli.frameGeometry.height,
+                    noBorder: cli.noBorder,
+                    fullScreen: cli.fullScreen
                 };
                 previousDesktops[cli] = deskId;
                 setBorder(cli);
