@@ -1,6 +1,3 @@
-// TODO: don't restore on resize
-
-
 /**
  * Grid layout configurations.
  * There is no upper limit for the number of layouts.
@@ -265,7 +262,7 @@ const tile = (cli, position) => {
                 previousDesktops[cli] = deskId;
                 setBorder(cli);
 
-                cli.clientStartUserMovedResized.connect(() => restore(cli));
+                cli.clientStartUserMovedResized.connect(() => !cli.resize && restore(cli));
                 
                 cli.desktopChanged.connect(() => {
                     cascade(previousDesktops[cli], positions[cli]);
