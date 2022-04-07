@@ -1,4 +1,6 @@
 /**
+ * NOTE! YOU SHOULD BACKUP THE CHANGES YOU MAKE, BECAUSE THE NEXT UPDATE WILL DESTROY THEM!
+ * 
  * Grid layout configurations.
  * There is no upper limit for the number of layouts.
  * The first one is used by default before the layout have been switched manually.
@@ -18,7 +20,7 @@
  * cascadeIndent controls the indent size in cascade effect.
  * The value is in pixels.
  * 
- * autoTileSlot defines the slot where new windows are opened to. 
+ * autoTileCell defines the cell where new windows are opened to. 
  * Set it false to disable tautomatic tiling for new windows.
  * [
  *    <window left side vertican grid edge>,
@@ -29,17 +31,25 @@
  * 
  * ignore must be a fuction that takes window (client) as a parameter and returns 
  * boolean indicating whether the grid command should be ignored or not. 
+ * Some example functions:
+ *   cli => !cli.normalWindow || !cli.moveable || !cli.resizeable || cli.specialWindow || cli.transient // More failproof
+ *   cli => cli.desktopWindow || cli.dock || cli.resourceClass == 'plasmashell'
+ *   cli => !cli.normalWindow || cli.resourceClass == 'firefox' // Added app specific rule
+ *   cli => !cli.normalWindow || (cli.windowRole == 'browser' && cli.resourceClass == 'firefox' && cli.resourceName == 'navigator') // Added window specific rule
  * 
  * 
- * @example 
- * // Even 2x2 layout without gaps, window frames and cascade effect.
+ * @example Even 2x2 layout without gaps, window frames, cascade effect and automatic tiling, that ignores Firefox.
  * {
  *      vEdges: [0, 0.5, 1],
  *      hEdges: [0, 0.5, 1],
  *      gap: 0,
  *      noBorder: true,
  *      cascadeIndent: 0,
+ *      autoTileCell: false,
+ *      ignore: cli => !cli.normalWindow || cli.resourceClass == 'firefox'
  * },
+ * 
+ * NOTE! YOU SHOULD BACKUP THE CHANGES YOU MAKE, BECAUSE THE NEXT UPDATE WILL DESTROY THEM!
  */
 const layouts = [ 
     {
@@ -59,7 +69,7 @@ const layouts = [
         vEdges: [0, 0.40, 1],
         hEdges: [0, 0.70, 1],
         noBorder: true,
-        autoTileSlot: false
+        autoTileCell: false
     },
 ];
 
@@ -72,15 +82,8 @@ const defaultLayoutParams = {
     gap: 0,
     cascadeIndent: 30,
     noBorder: false,
-    autoTileSlot: [1, 0, 2, 3],
+    autoTileCell: [1, 0, 2, 3],
     ignore: cli => !cli.normalWindow
-    /**
-     * Examples:
-    ignore: cli => !cli.normalWindow || !cli.moveable || !cli.resizeable || cli.specialWindow || cli.transient // More failproof
-    ignore: cli => cli.desktopWindow || cli.dock || cli.resourceClass == 'plasmashell'
-    ignore: cli => !cli.normalWindow || cli.resourceClass == 'firefox' // Added app specific rule
-    ignore: cli => !cli.normalWindow || (cli.windowRole == 'browser' && cli.resourceClass == 'firefox' && cli.resourceName == 'navigator') // Added window specific rule
-     */
 };
 
 
@@ -290,7 +293,7 @@ const move = direction => () =>
 
 
 const handleNewClient = cli => {
-    const position = getLayout(cli).autoTileSlot;
+    const position = getLayout(cli).autoTileCell;
     if (position) tile(cli, position);
 };
 
