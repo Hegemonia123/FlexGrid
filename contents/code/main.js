@@ -1,3 +1,6 @@
+// TODO: don't restore on resize
+
+
 /**
  * Grid layout configurations.
  * There is no upper limit for the number of layouts.
@@ -17,6 +20,15 @@
  * 
  * cascadeIndent controls the indent size in cascade effect.
  * The value is in pixels.
+ * 
+ * autoTileSlot defines the slot where new windows are opened to. 
+ * Set it false to disable tautomatic tiling for new windows.
+ * [
+ *    <window left side vertican grid edge>,
+ *    <window top side horizonal grid edge>,
+ *    <window right side vertican grid edge>,
+ *    <window bottom side horizonal grid edge>
+ * ]
  * 
  * ignore must be a fuction that takes window (client) as a parameter and returns 
  * boolean indicating whether the grid command should be ignored or not. 
@@ -49,7 +61,8 @@ const layouts = [
     {
         vEdges: [0, 0.40, 1],
         hEdges: [0, 0.70, 1],
-        noBorder: true
+        noBorder: true,
+        autoTileSlot: false
     },
 ];
 
@@ -62,6 +75,7 @@ const defaultLayoutParams = {
     gap: 0,
     cascadeIndent: 30,
     noBorder: false,
+    autoTileSlot: [1, 0, 2, 3],
     ignore: cli => !cli.normalWindow
     /**
      * Examples:
@@ -79,6 +93,7 @@ const positions = {};
 // Contains previous deskop for each client, to be used for re-cascading the previous desktop after client has been moved to another.
 const previousDesktops = {}; 
 const originalState = {};
+const clients = {};
 
 
 // Helpers
@@ -192,6 +207,7 @@ const restore = (cli, restorePosition) => {
         delete originalState[cli];
         delete positions[cli];
         delete previousDesktops[cli];
+        delete clients[cli];
 
         cascade(getDeskId(cli), position)
     }
@@ -220,23 +236,22 @@ const getGeometry = (cli, cascadeIdx, cascadeLength) => {
 
 
 const cascade = (deskId, position) => {
-    workspace.clientList()
-        .filter(cli => positions[cli]
-            && getDeskId(cli) === deskId
+    Object.values(clients)
+        .filter(cli =>
+            getDeskId(cli) === deskId
             && getCascadeId(cli, positions[cli]) === getCascadeId(cli, position)
         )
         .forEach((cli, idx, clis) => cli.frameGeometry = getGeometry(cli, idx, clis.length));
 };
 
 
-const move = direction => () => {
+const tile = (cli, position) => {
     try {
-        const cli = workspace.activeClient;
         const deskId = getDeskId(cli);
         const layout = getLayout(cli);
 
-        if (!layout.ignore(cli)) { 
-            if (!positions[cli]) {
+        if (!layout.ignore(cli)) {
+            if (!clients[cli]) {
                 // Copy properties instead of reference to geometry object
                 originalState[cli] = {
                     x: cli.frameGeometry.x,
@@ -246,6 +261,7 @@ const move = direction => () => {
                     noBorder: cli.noBorder,
                     fullScreen: cli.fullScreen
                 };
+                clients[cli] = cli;
                 previousDesktops[cli] = deskId;
                 setBorder(cli);
 
@@ -261,23 +277,30 @@ const move = direction => () => {
             
             const previousPosition = positions[cli];
 
-            const newPosition = getNewPosition(cli, direction);
-            positions[cli] = newPosition;
-            cascade(deskId, newPosition);
+            positions[cli] = position;
+            cascade(deskId, position);
             
             if (previousPosition && layout.cascadeIndent) cascade(deskId, previousPosition);
         }
     } catch (error) {
-        print('FlexGrid move error:', error);
+        print('FlexGrid tile error:', error);
     }
 };
 
 
-const refit = deskId => {
-    const deskClis = workspace.clientList().filter(cli => cli in positions && (!deskId || getDeskId(cli) === deskId));
-    
-    deskClis.forEach(setBorder);
+const move = direction => () => 
+    tile(workspace.activeClient, getNewPosition(workspace.activeClient, direction));
 
+
+const handleNewClient = cli => {
+    const position = getLayout(cli).autoTileSlot;
+    if (position) tile(cli, position);
+};
+
+
+const refit = deskId => {
+    const deskClis = Object.values(clients).filter(cli => !deskId || getDeskId(cli) === deskId);
+    deskClis.forEach(setBorder);
     deskClis.forEach(cli => cascade(getDeskId(cli), positions[cli]));
 };
 
@@ -308,5 +331,6 @@ registerShortcut("FlexGridRestore", "FlexGrid: Restore", "Meta+end", () => resto
 
 workspace.virtualScreenGeometryChanged.connect(refit);
 
+workspace.clientAdded.connect(handleNewClient);
 workspace.clientRemoved.connect(restore);
 
