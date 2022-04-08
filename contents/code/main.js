@@ -20,15 +20,6 @@
  * cascadeIndent controls the indent size in cascade effect.
  * The value is in pixels.
  * 
- * autoTileCell defines the cell where new windows are opened to. 
- * Set it false to disable tautomatic tiling for new windows.
- * [
- *    <window left side vertican grid edge>,
- *    <window top side horizonal grid edge>,
- *    <window right side vertican grid edge>,
- *    <window bottom side horizonal grid edge>
- * ]
- * 
  * ignore must be a fuction that takes window (client) as a parameter and returns 
  * boolean indicating whether the grid command should be ignored or not. 
  * Some example functions:
@@ -45,7 +36,6 @@
  *      gap: 0,
  *      noBorder: true,
  *      cascadeIndent: 0,
- *      autoTileCell: false,
  *      ignore: cli => !cli.normalWindow || cli.resourceClass == 'firefox'
  * },
  * 
@@ -69,31 +59,37 @@ const layouts = [
         vEdges: [0, 0.40, 1],
         hEdges: [0, 0.70, 1],
         noBorder: true,
-        autoTileCell: false
     },
 ];
 
 
-// Default parameters to be applied to every layout.
-// Default parameters are overridden by layout specific configuration.
+/** 
+ * Default parameters to be applied to every layout.
+ * Default parameters are overridden by layout specific configuration.
+ */
 const defaultLayoutParams = {
     vEdges: [0, 0.5, 1],
     hEdges: [0, 0.5, 1],
     gap: 0,
     cascadeIndent: 30,
     noBorder: false,
-    autoTileCell: [1, 0, 2, 3],
     ignore: cli => !cli.normalWindow
 };
 
 
 // State containers
+/** Selected layout for each desktop / screen / activity */
 const layoutSelections = {};
+/** Current position in the grid for each tiled window */
 const positions = {};
-// Contains previous deskop for each client, to be used for re-cascading the previous desktop after client has been moved to another.
+/** Contains previous deskop for each client, to be used for re-cascading the previous desktop after client has been moved to another. */
 const previousDesktops = {}; 
+/** Original state of the window before it was firs tiled */
 const originalState = {};
+/** Container for tiled windows, because newely created windows cannot be accessed through workspace methods when clientAdded signal is triggered */
 const clients = {};
+/** For storing application specific positions to be applied to new windows. */ 
+const appPositions = {}; 
 
 
 // Helpers
@@ -106,6 +102,8 @@ const limit = (val, lower, upper) => Math.max(Math.min(val, upper), lower);
 const getCascadeId = (cli, position) => fitPosition(position, getLayout(cli)).slice(0, 3).join(';');
 
 const setBorder = cli => cli.noBorder = originalState[cli].noBorder || getLayout(cli).noBorder || false;
+
+const getAppId = cli => cli.resourceName + ' ' + cli.resourceClass;
 
 
 /**
@@ -137,7 +135,6 @@ const getPreset = (cli, direction) => {
         case 'down': return [0, layout.hEdges.length - 2, layout.vEdges.length - 1, layout.hEdges.length - 1];
     }
 };
-
 
 
 /**
@@ -177,8 +174,9 @@ const getNewPosition = (cli, direction) => {
  * 
  * @param {AbstractClient} cli 
  * @param {boolean} restorePosition - Restore also position in addition to size
+ * @param {boolean} forgetAppPosition - If true, the next time app will open untiled. false will open it to the same cell.
  */
-const restore = (cli, restorePosition) => {
+const untile = (cli, restorePosition, forgetAppPosition) => {
     if (cli in positions) {
         // Resize to fit the screen area, because screen may have been changed after tiling started.
         const maxArea = workspace.clientArea(KWin.MaximizeArea, cli);
@@ -208,6 +206,7 @@ const restore = (cli, restorePosition) => {
         delete positions[cli];
         delete previousDesktops[cli];
         delete clients[cli];
+        if (forgetAppPosition) delete appPositions[getAppId(cli)];
 
         cascade(getDeskId(cli), position)
     }
@@ -265,7 +264,7 @@ const tile = (cli, position) => {
                 previousDesktops[cli] = deskId;
                 setBorder(cli);
 
-                cli.clientStartUserMovedResized.connect(() => !cli.resize && restore(cli));
+                cli.clientStartUserMovedResized.connect(() => !cli.resize && untile(cli, false, true));
                 
                 cli.desktopChanged.connect(() => {
                     cascade(previousDesktops[cli], positions[cli]);
@@ -279,6 +278,7 @@ const tile = (cli, position) => {
 
             positions[cli] = position;
             cascade(deskId, position);
+            appPositions[getAppId(cli)] = position;
             
             if (previousPosition && layout.cascadeIndent) cascade(deskId, previousPosition);
         }
@@ -293,7 +293,7 @@ const move = direction => () =>
 
 
 const handleNewClient = cli => {
-    const position = getLayout(cli).autoTileCell;
+    const position = appPositions[getAppId(cli)];
     if (position) tile(cli, position);
 };
 
@@ -327,10 +327,10 @@ registerShortcut("FlexGridMoveDown", "FlexGrid: Move Window down", "Meta+Down", 
 registerShortcut("FlexGridNextLayout", "FlexGrid: Next layout", "Meta+Ctrl+Right", switchLayout('next'));
 registerShortcut("FlexGridPreviousLayout", "FlexGrid: Previous layout", "Meta+Ctrl+Left", switchLayout('prev'));
 
-registerShortcut("FlexGridRestore", "FlexGrid: Restore", "Meta+end", () => restore(workspace.activeClient, true));
+registerShortcut("FlexGridUntile", "FlexGrid: Untile", "Meta+end", () => untile(workspace.activeClient, true, true));
 
 workspace.virtualScreenGeometryChanged.connect(refit);
 
 workspace.clientAdded.connect(handleNewClient);
-workspace.clientRemoved.connect(restore);
+workspace.clientRemoved.connect(cli => untile(cli, true, false));
 
