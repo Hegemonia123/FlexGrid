@@ -24,6 +24,8 @@ A flexible grid system for KDE.
 ## Configuration
 Edit `layouts` variable in the beginning of `~/.local/share/kwin/scripts/flexGrid/contents/code/main.js`. Kwin restart is required for the changes to take effect. Hit `Alt+f2` and type `kwin --replace`.
 
+**NOTE! YOU SHOULD BACKUP THE CHANGES YOU MAKE, BECAUSE THE NEXT UPDATE WILL DESTROY THEM!**
+
 ## Notes 
 - Windows that are selected to be visible on all virtual desktops or multiple activities may behave unexpectedly, since they have their own grid layouts.
 - Hotkeys conflict with the default corner tiling. You may have to remove them to make FlexGrid work.
