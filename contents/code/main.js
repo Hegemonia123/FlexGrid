@@ -56,9 +56,10 @@ const layouts = [
         hEdges: [0, 0.5, 0.7, 1],
     },
     {
-        vEdges: [0, 0.40, 1],
-        hEdges: [0, 0.70, 1],
+        vEdges: [0, 0.43, 1],
+        hEdges: [0, 0.75, 1],
         noBorder: true,
+        cascadeIndent: 0
     },
 ];
 
