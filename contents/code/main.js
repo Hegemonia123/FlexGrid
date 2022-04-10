@@ -265,7 +265,7 @@ const tile = (cli, position) => {
                 previousDesktops[cli] = deskId;
                 setBorder(cli);
 
-                cli.clientStartUserMovedResized.connect(() => !cli.resize && untile(cli, false, true));
+                cli.clientStepUserMovedResized.connect(() => !cli.resize && untile(cli, false, true));
                 
                 cli.desktopChanged.connect(() => {
                     cascade(previousDesktops[cli], positions[cli]);
