@@ -106,6 +106,12 @@ const setBorder = cli => cli.noBorder = originalState[cli].noBorder || getLayout
 
 const getAppId = cli => cli.resourceName + ' ' + cli.resourceClass;
 
+const forceFullScreen = cli => {
+    // Dirty hack: Otherwise panels remain visible.
+    cli.fullScreen = false;
+    cli.fullScreen = true;
+};
+
 
 /**
  * @description Force cell boundaries within grid
@@ -197,11 +203,7 @@ const untile = (cli, restorePosition, forgetAppPosition) => {
 
         const position = positions[cli];
         cli.noBorder = noBorder;
-        if (fullScreen) {
-            // Dirty hack: Otherwise panels remain visible.
-            cli.fullScreen = false;
-            cli.fullScreen = true;
-        }
+        if (fullScreen) forceFullScreen(cli);
 
         delete originalState[cli];
         delete positions[cli];
@@ -245,40 +247,48 @@ const cascade = (deskId, position) => {
 };
 
 
+const initialize = cli => {
+    // Copy properties instead of reference to geometry object
+    originalState[cli] = {
+        x: cli.frameGeometry.x,
+        y: cli.frameGeometry.y,
+        width: cli.frameGeometry.width,
+        height: cli.frameGeometry.height,
+        noBorder: cli.noBorder,
+        fullScreen: cli.fullScreen
+    };
+    clients[cli] = cli;
+    previousDesktops[cli] = getDeskId(cli);
+    setBorder(cli);
+
+    cli.clientStepUserMovedResized.connect(() => !cli.resize && untile(cli, false, true));
+
+    cli.desktopChanged.connect(() => {
+        if (clients[cli]) {
+            cascade(previousDesktops[cli], positions[cli]);
+            previousDesktops[cli] = getDeskId(cli);
+            cascade(previousDesktops[cli], positions[cli]);
+            setBorder(cli);
+        }
+    });
+}
+
+
 const tile = (cli, position) => {
     try {
         const deskId = getDeskId(cli);
         const layout = getLayout(cli);
 
         if (!layout.ignore(cli)) {
-            if (!clients[cli]) {
-                // Copy properties instead of reference to geometry object
-                originalState[cli] = {
-                    x: cli.frameGeometry.x,
-                    y: cli.frameGeometry.y,
-                    width: cli.frameGeometry.width,
-                    height: cli.frameGeometry.height,
-                    noBorder: cli.noBorder,
-                    fullScreen: cli.fullScreen
-                };
-                clients[cli] = cli;
-                previousDesktops[cli] = deskId;
-                setBorder(cli);
-
-                cli.clientStepUserMovedResized.connect(() => !cli.resize && untile(cli, false, true));
-                
-                cli.desktopChanged.connect(() => {
-                    cascade(previousDesktops[cli], positions[cli]);
-                    previousDesktops[cli] = getDeskId(cli);
-                    cascade(previousDesktops[cli], positions[cli]);
-                    setBorder(cli);
-                });
-            }
+            if (!clients[cli]) initialize(cli);
             
             const previousPosition = positions[cli];
-
+            
             positions[cli] = position;
-            cascade(deskId, position);
+
+            if (position == '' + getPreset(cli, 'up') && cli.fullScreen) forceFullScreen(cli);
+            else cascade(deskId, position);
+
             appPositions[getAppId(cli)] = position;
             
             if (previousPosition && layout.cascadeIndent) cascade(deskId, previousPosition);
