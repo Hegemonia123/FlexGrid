@@ -114,12 +114,6 @@ const setBorder = cli => cli.noBorder = originalState[cli].noBorder || getLayout
 
 const getAppId = cli => cli.resourceName + ' ' + cli.resourceClass;
 
-const forceFullScreen = cli => {
-    // Dirty hack: Otherwise panels remain visible.
-    cli.fullScreen = false;
-    cli.fullScreen = true;
-};
-
 
 /**
  * @description Force cell boundaries within grid
@@ -160,6 +154,7 @@ const getPreset = (cli, direction) => {
 const getNewPosition = (cli, direction) => {
     let position = positions[cli];
 
+    // Initialize fullscreen and maximized windows as if they were already tiled to cover the whole grid.
     if (!position && (cli.fullScreen || cli.frameGeometry == workspace.clientArea(KWin.MaximizeArea, cli))) {
         position = getPreset(cli, 'up');
     }
@@ -208,27 +203,21 @@ const clearState = (cli, forgetAppPosition) => {
 const untile = (cli, restorePosition, forgetAppPosition) => {
     if (clients[cli]) {
         // Resize to fit the screen area, because screen may have been changed after tiling started.
-        const maxArea = workspace.clientArea(KWin.MaximizeArea, cli);
         let { x, y, width, height, fullScreen, noBorder } = originalState[cli];
+        const maxArea = workspace.clientArea(fullScreen ? KWin.FullScreenArea : KWin.MaximizeArea, cli);
         width = limit(width, cli.minSize.width, maxArea.width);
         height = limit(height, cli.minSize.height, maxArea.height);
+        x = limit(x, maxArea.x, maxArea.width - width);
+        y = limit(y, maxArea.y, maxArea.height - height);
 
-        if (restorePosition)
-            cli.frameGeometry = {
-                x: limit(x, maxArea.x, maxArea.width - width),
-                y: limit(y, maxArea.y, maxArea.height - height),
-                width,
-                height
-            };
-        else // Restore only window size
-            cli.frameGeometry = { height, width };
+        Object.assign(cli, {
+            noBorder,
+            fullScreen,
+            frameGeometry: Object.assign({ width, height }, restorePosition ? { x, y } : {})
+        });
 
         const position = positions[cli];
-        cli.noBorder = noBorder;
-        if (fullScreen) forceFullScreen(cli);
-        
         clearState(cli, forgetAppPosition);
-
         cascade(getDeskId(cli), position)
     }
 };
@@ -242,7 +231,13 @@ const untile = (cli, restorePosition, forgetAppPosition) => {
  */
 const getGeometry = (cli, cascadeIdx, cascadeLength) => {
     const layout = getLayout(cli);
-    let [left, top, right, bottom] = fitPosition(positions[cli], layout);
+    const position = fitPosition(positions[cli], layout);
+    
+    // Make window actually fullscreen if it is a "fullScreen" window covering the whole grid
+    if (cli.fullScreen && position == '' + getPreset(cli, 'up')) 
+        return workspace.clientArea(KWin.FullScreenArea, cli);
+
+    let [left, top, right, bottom] = position;
     const maxArea = workspace.clientArea(KWin.MaximizeArea, cli);
 
     const x = maxArea.x + Math.round(layout.vEdges[left] * maxArea.width) + layout.gap * (left === 0 ? 2 : 1) + cascadeIdx * layout.cascadeIndent;
@@ -330,9 +325,8 @@ const tile = (cli, position) => {
             const previousPosition = positions[cli];
             
             positions[cli] = position;
-
-            if (position == '' + getPreset(cli, 'up') && cli.fullScreen) forceFullScreen(cli);
-            else cascade(deskId, position);
+            
+            cascade(deskId, position);
 
             if (!cli.fullScreen) appPositions[getAppId(cli)] = position;
             
