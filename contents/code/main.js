@@ -114,6 +114,8 @@ const setBorder = cli => cli.noBorder = originalState[cli].noBorder || getLayout
 
 const getAppId = cli => cli.resourceName + ' ' + cli.resourceClass;
 
+const isFullScreen = cli => cli.fullScreen && positions[cli] == '' + getPreset(cli, 'up');
+
 
 /**
  * @description Force cell boundaries within grid
@@ -234,7 +236,7 @@ const getGeometry = (cli, cascadeIdx, cascadeLength) => {
     const position = fitPosition(positions[cli], layout);
     
     // Make window actually fullscreen if it is a "fullScreen" window covering the whole grid
-    if (cli.fullScreen && position == '' + getPreset(cli, 'up')) 
+    if (isFullScreen(cli)) 
         return workspace.clientArea(KWin.FullScreenArea, cli);
 
     let [left, top, right, bottom] = position;
@@ -251,12 +253,18 @@ const getGeometry = (cli, cascadeIdx, cascadeLength) => {
 
 
 const cascade = (deskId, position) => {
-    Object.values(clients)
-        .filter(cli =>
-            getDeskId(cli) === deskId
-            && getCascadeId(cli, positions[cli]) === getCascadeId(cli, position)
-        )
-        .forEach((cli, idx, clis) => cli.frameGeometry = getGeometry(cli, idx, clis.length));
+    const clis = Object.values(clients).filter(cli =>
+        getDeskId(cli) === deskId
+        && getCascadeId(cli, positions[cli]) === getCascadeId(cli, position)
+    );
+
+    // Cascaded windows
+    clis.filter(cli => !isFullScreen(cli))
+        .forEach((cli, idx, cascadeClis) => cli.frameGeometry = getGeometry(cli, idx, cascadeClis.length));
+
+    // Actual fullScreen windows. Not cascaded.
+    clis.filter(isFullScreen)
+        .forEach(cli => cli.frameGeometry = getGeometry(cli, 0, 1));
 };
 
 
@@ -333,7 +341,7 @@ const tile = (cli, position) => {
             if (previousPosition && layout.cascadeIndent) cascade(deskId, previousPosition);
         }
     } catch (error) {
-        print('FlexGrid tile error:', error);
+        print('FlexGrid tile error:', error, error.stack);
     }
 };
 
@@ -364,7 +372,7 @@ const switchLayout = direction => () => {
 
         refit(deskId);
     } catch (error) {
-        print('FlexGrid switchLayout error:', error);
+        print('FlexGrid switchLayout error:', error, error.stack);
     }
 };
 
