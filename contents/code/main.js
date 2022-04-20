@@ -283,9 +283,11 @@ const handleFullScreenChange = cli => {
         if (cli.fullScreen) { // Changed to full screen
             positionBeforeFullScreen[cli] = positions[cli];
             positions[cli] = getPreset(cli, 'up');
+            cascade(getDeskId(cli), positionBeforeFullScreen[cli]);
         } else { // Restored from full screen
             if (positionBeforeFullScreen[cli]) { // The position before full screen is known.
                 positions[cli] = positionBeforeFullScreen[cli];
+                cascade(getDeskId(cli), positions[cli]);
                 delete positionBeforeFullScreen[cli];
             } else { 
                 // Window manager wants to restore the postion and we don't know where.
