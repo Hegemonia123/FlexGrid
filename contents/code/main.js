@@ -56,8 +56,16 @@ const layouts = [
         hEdges: [0, 0.5, 0.7, 1],
     },
     {
-        vEdges: [0, 0.25, 0.5, 0.75, 1],
+        vEdges: [0, 0.21, 0.79, 1],
         hEdges: [0, 0.5, 0.75, 1],
+    },
+    // { // 4x3
+    //     vEdges: [0, 0.25, 0.5, 0.75, 1],
+    //     hEdges: [0, 0.5, 0.75, 1],
+    // },
+    { // Maximize all
+        vEdges: [0, 1],
+        hEdges: [0, 1],
     },
     {
         vEdges: [0, 0.43, 1],
@@ -162,7 +170,7 @@ const getNewPosition = (cli, direction) => {
     }
 
     if (!position) return getPreset(cli, direction);
-
+    
     const layout = getLayout(cli);
     let [left, top, right, bottom] = fitPosition(position, layout);
 
