@@ -163,8 +163,8 @@ const getNewPosition = (cli, direction) => {
 
     if (!position) return getPreset(cli, direction);
 
-    let [left, top, right, bottom] = position;
     const layout = getLayout(cli);
+    let [left, top, right, bottom] = fitPosition(position, layout);
 
     // Cannot shrink -> back to preset position
     if (direction === 'right' && left === layout.vEdges.length - 2) return getPreset(cli, 'right');
