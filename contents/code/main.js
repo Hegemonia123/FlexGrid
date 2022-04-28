@@ -316,6 +316,7 @@ const initialize = cli => {
         eventListeners: {
             clientStepUserMovedResized: () => !cli.resize && untile(cli, false, true),
             desktopChanged: () => handleDesktopChange(cli),
+            screenChanged: () => handleDesktopChange(cli),
             fullScreenChanged: () => handleFullScreenChange(cli),
             clientMaximizedStateChanged: () => clearState(cli),
         }
