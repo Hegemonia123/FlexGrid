@@ -90,23 +90,14 @@ const defaultLayoutParams = {
 };
 
 
-// State containers
 /** Selected layout for each desktop / screen / activity */
 const layoutSelections = {};
-/** Current position in the grid for each tiled window */
-const positions = {};
-/** Contains previous deskop for each client, to be used for re-cascading the previous desktop after client has been moved to another. */
-const previousDesktops = {}; 
-/** Original state of the window before it was firs tiled */
-const originalState = {};
-/** Container for tiled windows, because newely created windows cannot be accessed through workspace methods when clientAdded signal is triggered */
+
+/** Client state */
 const clients = {};
+
 /** For storing application specific positions to be applied to new windows. */ 
 const appPositions = {}; 
-/** Contains window positions before they were set as full screen to be restored when full screen is exited. */
-const positionBeforeFullScreen = {};
-/** Contains registered event (signal) listeners for unregistering */
-const eventListeners = {};
 
 
 // Helpers
@@ -118,11 +109,11 @@ const limit = (val, lower, upper) => Math.max(Math.min(val, upper), lower);
 
 const getCascadeId = (cli, position) => fitPosition(position, getLayout(cli)).slice(0, 3).join(';');
 
-const setBorder = cli => cli.noBorder = originalState[cli].noBorder || getLayout(cli).noBorder || false;
+const setBorder = cli => cli.noBorder = clients[cli].originalState.noBorder || getLayout(cli).noBorder || false;
 
 const getAppId = cli => cli.resourceName + ' ' + cli.resourceClass;
 
-const isFullScreen = cli => cli.fullScreen && positions[cli] == '' + getPreset(cli, 'up');
+const isFullScreen = cli => cli.fullScreen && clients[cli].position == '' + getPreset(cli, 'up');
 
 
 /**
@@ -162,7 +153,7 @@ const getPreset = (cli, direction) => {
  * @returns {number[]} Mew position
  */
 const getNewPosition = (cli, direction) => {
-    let position = positions[cli];
+    let position = (clients[cli] || {}).position;
 
     if (!position) {
         // Initialize fullscreen and maximized windows as if they were already tiled to cover the whole grid.
@@ -196,14 +187,9 @@ const getNewPosition = (cli, direction) => {
 
 
 const clearState = (cli, forgetAppPosition) => {
-    delete originalState[cli];
-    delete positions[cli];
-    delete previousDesktops[cli];
-    delete clients[cli];
     if (forgetAppPosition) delete appPositions[getAppId(cli)];
-
-    Object.entries(eventListeners[cli]).forEach(([event, handler]) => cli[event].disconnect(handler));
-    delete eventListeners[cli];
+    Object.entries(clients[cli].eventListeners).forEach(([event, handler]) => cli[event].disconnect(handler));
+    delete clients[cli];
 };
 
 
@@ -216,7 +202,7 @@ const clearState = (cli, forgetAppPosition) => {
 const untile = (cli, restorePosition, forgetAppPosition) => {
     if (clients[cli]) {
         // Resize to fit the screen area, because screen may have been changed after tiling started.
-        let { x, y, width, height, fullScreen, noBorder } = originalState[cli];
+        let { x, y, width, height, fullScreen, noBorder } = clients[cli].originalState;
         const maxArea = workspace.clientArea(fullScreen ? KWin.FullScreenArea : KWin.MaximizeArea, cli);
         width = limit(width, cli.minSize.width, maxArea.width);
         height = limit(height, cli.minSize.height, maxArea.height);
@@ -229,7 +215,7 @@ const untile = (cli, restorePosition, forgetAppPosition) => {
             frameGeometry: Object.assign({ width, height }, restorePosition ? { x, y } : {})
         });
 
-        const position = positions[cli];
+        const position = clients[cli].position;
         clearState(cli, forgetAppPosition);
         cascade(getDeskId(cli), position)
     }
@@ -244,7 +230,7 @@ const untile = (cli, restorePosition, forgetAppPosition) => {
  */
 const getGeometry = (cli, cascadeIdx, cascadeLength) => {
     const layout = getLayout(cli);
-    const position = fitPosition(positions[cli], layout);
+    const position = fitPosition(clients[cli].position, layout);
     
     // Make window actually fullscreen if it is a "fullScreen" window covering the whole grid
     if (isFullScreen(cli)) 
@@ -263,11 +249,13 @@ const getGeometry = (cli, cascadeIdx, cascadeLength) => {
 };
 
 
-const cascade = (deskId, position) => {
-    const clis = Object.values(clients).filter(cli =>
-        getDeskId(cli) === deskId
-        && getCascadeId(cli, positions[cli]) === getCascadeId(cli, position)
-    );
+const cascade = (deskId, cascadePos) => {
+    const clis = Object.values(clients)
+        .filter(({ cli, position }) =>
+            getDeskId(cli) === deskId
+            && getCascadeId(cli, position) === getCascadeId(cli, cascadePos)
+        )
+        .map(({ cli }) => cli)
 
     // Cascaded windows
     clis.filter(cli => !isFullScreen(cli))
@@ -281,9 +269,10 @@ const cascade = (deskId, position) => {
 
 const handleDesktopChange = cli => {
     if (clients[cli]) {
-        cascade(previousDesktops[cli], positions[cli]);
-        previousDesktops[cli] = getDeskId(cli);
-        cascade(previousDesktops[cli], positions[cli]);
+        const c = clients[cli];
+        cascade(c.previousDesktop, c.position);
+        cascade(getDeskId(cli), c.position);
+        c.previousDesktop = getDeskId(cli);
         setBorder(cli);
     }
 };
@@ -291,15 +280,16 @@ const handleDesktopChange = cli => {
 
 const handleFullScreenChange = cli => {
     if (clients[cli]) {
+        const c = clients[cli];
         if (cli.fullScreen) { // Changed to full screen
-            positionBeforeFullScreen[cli] = positions[cli];
-            positions[cli] = getPreset(cli, 'up');
-            cascade(getDeskId(cli), positionBeforeFullScreen[cli]);
+            c.positionBeforeFullScreen = c.position;
+            c.position = getPreset(cli, 'up');
+            cascade(getDeskId(cli), c.positionBeforeFullScreen);
         } else { // Restored from full screen
-            if (positionBeforeFullScreen[cli]) { // The position before full screen is known.
-                positions[cli] = positionBeforeFullScreen[cli];
-                cascade(getDeskId(cli), positions[cli]);
-                delete positionBeforeFullScreen[cli];
+            if (c.positionBeforeFullScreen) { // The position before full screen is known.
+                c.position = c.positionBeforeFullScreen;
+                cascade(getDeskId(cli), c.position);
+                delete c.positionBeforeFullScreen;
             } else { 
                 // Window manager wants to restore the postion and we don't know where.
                 // We also cannot compete with WM -> Just clear tiling state, and regard it as not tiled.
@@ -312,26 +302,27 @@ const handleFullScreenChange = cli => {
 
 
 const initialize = cli => {
-    // Copy properties instead of reference to geometry object
-    originalState[cli] = {
-        x: cli.frameGeometry.x,
-        y: cli.frameGeometry.y,
-        width: cli.frameGeometry.width,
-        height: cli.frameGeometry.height,
-        noBorder: cli.noBorder,
-        fullScreen: cli.fullScreen
+    clients[cli] = {
+        cli,
+        originalState: { // Copy properties instead of reference to geometry object
+            x: cli.frameGeometry.x,
+            y: cli.frameGeometry.y,
+            width: cli.frameGeometry.width,
+            height: cli.frameGeometry.height,
+            noBorder: cli.noBorder,
+            fullScreen: cli.fullScreen
+        },
+        previousDesktop: getDeskId(cli),
+        eventListeners: {
+            clientStepUserMovedResized: () => !cli.resize && untile(cli, false, true),
+            desktopChanged: () => handleDesktopChange(cli),
+            fullScreenChanged: () => handleFullScreenChange(cli),
+            clientMaximizedStateChanged: () => clearState(cli),
+        }
     };
-    clients[cli] = cli;
-    previousDesktops[cli] = getDeskId(cli);
     setBorder(cli);
 
-    eventListeners[cli] = {
-        clientStepUserMovedResized: () => !cli.resize && untile(cli, false, true),
-        desktopChanged: () => handleDesktopChange(cli),
-        fullScreenChanged: () => handleFullScreenChange(cli),
-        clientMaximizedStateChanged: () => clearState(cli),
-    };
-    Object.entries(eventListeners[cli]).forEach(([event, handler]) => cli[event].connect(handler));
+    Object.entries(clients[cli].eventListeners).forEach(([event, handler]) => cli[event].connect(handler));
 };
 
 
@@ -343,9 +334,9 @@ const tile = (cli, position) => {
         if (!layout.ignore(cli)) {
             if (!clients[cli]) initialize(cli);
             
-            const previousPosition = positions[cli];
+            const previousPosition = clients[cli].position;
             
-            positions[cli] = position;
+            clients[cli].position = position;
             
             cascade(deskId, position);
 
@@ -370,9 +361,9 @@ const handleNewClient = cli => {
 
 
 const refit = deskId => {
-    const deskClis = Object.values(clients).filter(cli => !deskId || getDeskId(cli) === deskId);
-    deskClis.forEach(setBorder);
-    deskClis.forEach(cli => cascade(getDeskId(cli), positions[cli]));
+    const deskClis = Object.values(clients).filter(({ cli }) => !deskId || getDeskId(cli) === deskId);
+    deskClis.forEach(({ cli }) => setBorder(cli));
+    deskClis.forEach(({ cli, position }) => cascade(getDeskId(cli), position));
 };
 
 
