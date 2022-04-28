@@ -1,5 +1,5 @@
 /**
- * NOTE! YOU SHOULD BACKUP THE CHANGES YOU MAKE, BECAUSE THE NEXT UPDATE WILL DESTROY THEM!
+ * NOTE! YOU SHOULD BACKUP THE CHANGES YOU MAKE, BECAUSE THE NEXT UPDATE WILL OVERRIDE THEM!
  * 
  * Grid layout configurations.
  * There is no upper limit for the number of layouts.
@@ -39,7 +39,7 @@
  *      ignore: cli => !cli.normalWindow || cli.resourceClass == 'firefox'
  * },
  * 
- * NOTE! YOU SHOULD BACKUP THE CHANGES YOU MAKE, BECAUSE THE NEXT UPDATE WILL DESTROY THEM!
+ * NOTE! YOU SHOULD BACKUP THE CHANGES YOU MAKE, BECAUSE THE NEXT UPDATE WILL OVERRIDE THEM!
  */
 const layouts = [ 
     {
@@ -164,12 +164,17 @@ const getPreset = (cli, direction) => {
 const getNewPosition = (cli, direction) => {
     let position = positions[cli];
 
-    // Initialize fullscreen and maximized windows as if they were already tiled to cover the whole grid.
-    if (!position && (cli.fullScreen || cli.frameGeometry == workspace.clientArea(KWin.MaximizeArea, cli))) {
-        position = getPreset(cli, 'up');
+    if (!position) {
+        // Initialize fullscreen and maximized windows as if they were already tiled to cover the whole grid.
+        if (cli.fullScreen) {
+            position = getPreset(cli, 'up');
+        } else if (cli.frameGeometry == workspace.clientArea(KWin.MaximizeArea, cli)) {
+            cli.setMaximize(false, false); // Unmaximize because maximized windows have differrent borders
+            position = getPreset(cli, 'up');
+        } else {
+            return getPreset(cli, direction);
+        }
     }
-
-    if (!position) return getPreset(cli, direction);
     
     const layout = getLayout(cli);
     let [left, top, right, bottom] = fitPosition(position, layout);
@@ -197,9 +202,7 @@ const clearState = (cli, forgetAppPosition) => {
     delete clients[cli];
     if (forgetAppPosition) delete appPositions[getAppId(cli)];
 
-    cli.clientStepUserMovedResized.disconnect(eventListeners[cli].clientStepUserMovedResized);
-    cli.desktopChanged.disconnect(eventListeners[cli].desktopChanged);
-    cli.fullScreenChanged.disconnect(eventListeners[cli].fullScreenChanged);
+    Object.entries(eventListeners[cli]).forEach(([event, handler]) => cli[event].disconnect(handler));
     delete eventListeners[cli];
 };
 
@@ -322,14 +325,14 @@ const initialize = cli => {
     previousDesktops[cli] = getDeskId(cli);
     setBorder(cli);
 
-    const clientStepUserMovedResized = () => !cli.resize && untile(cli, false, true);
-    const desktopChanged = () => handleDesktopChange(cli);
-    const fullScreenChanged = () => handleFullScreenChange(cli);
-    cli.clientStepUserMovedResized.connect(clientStepUserMovedResized);
-    cli.desktopChanged.connect(desktopChanged);
-    cli.fullScreenChanged.connect(fullScreenChanged);
-    eventListeners[cli] = { clientStepUserMovedResized, desktopChanged, fullScreenChanged };
-}
+    eventListeners[cli] = {
+        clientStepUserMovedResized: () => !cli.resize && untile(cli, false, true),
+        desktopChanged: () => handleDesktopChange(cli),
+        fullScreenChanged: () => handleFullScreenChange(cli),
+        clientMaximizedStateChanged: () => clearState(cli),
+    };
+    Object.entries(eventListeners[cli]).forEach(([event, handler]) => cli[event].connect(handler));
+};
 
 
 const tile = (cli, position) => {
