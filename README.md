@@ -7,6 +7,10 @@ Inspired by Wintile Gnome extension: https://github.com/fmstrat/wintile
 ![Screenshot](/screenshot.jpg)
 
 
+https://user-images.githubusercontent.com/102908263/167155213-5471ee08-e51e-441f-b7d9-e18e253da3da.mp4
+
+
+
 ## Features
 - Tile / put windows to grid.
 - Simple usage. Just few hotkeys.
