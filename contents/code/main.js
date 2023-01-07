@@ -258,6 +258,7 @@ const getGeometry = (cli, cascadeIdx, cascadeLength) => {
 const cascade = (deskId, cascadePos) => {
     const clis = Object.values(clients)
         .filter(({ cli, position }) =>
+            !cli.minimized &&
             getDeskId(cli) === deskId
             && getCascadeId(cli, position) === getCascadeId(cli, cascadePos)
         )
@@ -321,6 +322,7 @@ const initialize = cli => {
         previousDesktop: getDeskId(cli),
         eventListeners: {
             clientStepUserMovedResized: () => !cli.resize && untile(cli, false, true),
+            minimizedChanged: () => cascade(getDeskId(cli), clients[cli].position),
             desktopChanged: () => handleDesktopChange(cli),
             screenChanged: () => handleDesktopChange(cli),
             fullScreenChanged: () => handleFullScreenChange(cli),
