@@ -89,7 +89,7 @@ const layouts = [
 const defaultLayoutParams = {
     vEdges: [0, 0.5, 1],
     hEdges: [0, 0.5, 1],
-    gap: 0,
+    gap: 3,
     cascadeIndent: 20,
     noBorder: false,
     ignore: cli => !cli.normalWindow
