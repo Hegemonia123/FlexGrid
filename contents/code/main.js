@@ -105,9 +105,32 @@ const clients = {};
 /** For storing application specific positions to be applied to new windows. */ 
 const appPositions = {}; 
 
+let screenSetup = {};
+
 
 // Helpers
-const getDeskId = cli => cli.screen + ';' + cli.desktop + ';' + (cli.activities.length ? cli.activities : workspace.activities);
+const refreshScreenSetup = () => {
+    // Hacky method to parse screen configuration from supportInformation
+    screenSetup = (workspace.supportInformation().match(/Screen \d:(.|\n)+=====/)[0] || '')
+        .split(/Screen/)
+        .map(val => val.trim())
+        .filter(Boolean)
+        .reduce((res, cur) => Object.assign(res, {
+            [cur[0]]: {
+                name: cur.match(/Name:.+\n/)[0].split(' ')[1].trim(),
+                resolution: cur.match(/Geometry:.+\n/)[0].split(' ')[1].trim().split(',').pop()
+            }
+        }), {});
+}
+refreshScreenSetup()
+
+
+const getDeskId = cli => [
+    screenSetup[cli.screen].name,
+    screenSetup[cli.screen].resolution,
+    cli.desktop,
+    (cli.activities.length ? cli.activities : workspace.activities)
+].join('::');
 
 const getLayout = cli => Object.assign({}, defaultLayoutParams, layouts[layoutSelections[getDeskId(cli)]] || layouts[0]);
 
@@ -259,6 +282,7 @@ const cascade = (deskId, cascadePos) => {
     const clis = Object.values(clients)
         .filter(({ cli, position }) =>
             !cli.minimized &&
+            cli.screen >= 0 && // When screen is unplugged some clients get negative screen values. Ignore them.
             getDeskId(cli) === deskId
             && getCascadeId(cli, position) === getCascadeId(cli, cascadePos)
         )
@@ -370,9 +394,12 @@ const handleNewClient = cli => {
 
 
 const refit = deskId => {
-    const deskClis = Object.values(clients).filter(({ cli }) => !deskId || getDeskId(cli) === deskId);
-    deskClis.forEach(({ cli }) => setBorder(cli));
-    deskClis.forEach(({ cli, position }) => cascade(getDeskId(cli), position));
+    Object.values(clients)
+        .filter(({ cli }) => !deskId || getDeskId(cli) === deskId)
+        .forEach(({ cli, position }) => {
+            setBorder(cli);
+            cascade(getDeskId(cli), position);
+        });
 };
 
 
@@ -400,6 +427,7 @@ registerShortcut("FlexGridPreviousLayout", "FlexGrid: Previous layout", "Meta+Ct
 
 registerShortcut("FlexGridUntile", "FlexGrid: Untile", "Meta+end", () => untile(workspace.activeClient, true, true));
 
+workspace.virtualScreenGeometryChanged.connect(refreshScreenSetup);
 workspace.virtualScreenGeometryChanged.connect(refit);
 
 workspace.clientAdded.connect(handleNewClient);
