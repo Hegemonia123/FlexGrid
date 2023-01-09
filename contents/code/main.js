@@ -96,6 +96,11 @@ const defaultLayoutParams = {
 };
 
 
+const defaultNormalLayout = 5;
+const defaultWideLayout = 0;
+const wideLayoutTreshold = 2;
+
+
 /** Selected layout for each desktop / screen / activity */
 const layoutSelections = {};
 
@@ -115,12 +120,17 @@ const refreshScreenSetup = () => {
         .split(/Screen/)
         .map(val => val.trim())
         .filter(Boolean)
-        .reduce((res, cur) => Object.assign(res, {
-            [cur[0]]: {
-                name: cur.match(/Name:.+\n/)[0].split(' ')[1].trim(),
-                resolution: cur.match(/Geometry:.+\n/)[0].split(' ')[1].trim().split(',').pop()
-            }
-        }), {});
+        .reduce((res, cur) => {
+            const resolution = cur.match(/Geometry:.+\n/)[0].split(' ')[1].trim().split(',').pop();
+            const [x, y] = resolution.split('x').map(Number);
+            return Object.assign(res, {
+                [cur[0]]: {
+                    name: cur.match(/Name:.+\n/)[0].split(' ')[1].trim(),
+                    resolution,
+                    aspectRatio: x / y
+                }
+            })
+        }, {});
 }
 refreshScreenSetup()
 
@@ -132,7 +142,12 @@ const getDeskId = cli => [
     (cli.activities.length ? cli.activities : workspace.activities)
 ].join('::');
 
-const getLayout = cli => Object.assign({}, defaultLayoutParams, layouts[layoutSelections[getDeskId(cli)]] || layouts[0]);
+
+const getDefaultLayout = cli => 
+    screenSetup[cli.screen].aspectRatio > wideLayoutTreshold ? defaultWideLayout :  defaultNormalLayout;
+
+
+const getLayout = cli => Object.assign({}, defaultLayoutParams, layouts[layoutSelections[getDeskId(cli)] ?? getDefaultLayout(cli)]);
 
 const limit = (val, lower, upper) => Math.max(Math.min(val, upper), lower);
 
@@ -407,7 +422,7 @@ const switchLayout = direction => () => {
     try {
         const deskId = getDeskId(workspace.activeClient);
         
-        layoutSelections[deskId] = (layoutSelections[deskId] || 0) + (direction === 'next' ? 1 : -1);
+        layoutSelections[deskId] = (layoutSelections[deskId] || getDefaultLayout(workspace.activeClient)) + (direction === 'next' ? 1 : -1);
         layoutSelections[deskId] = limit(layoutSelections[deskId], 0, layouts.length - 1);
 
         refit(deskId);
