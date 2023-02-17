@@ -3,7 +3,6 @@
  * 
  * Grid layout configurations.
  * There is no upper limit for the number of layouts.
- * The first one is used by default before the layout have been switched manually.
  * 
  * vEdges and hEdges contain horizonal and vertical grid cell edges relative to screen.
  * Both arrays must contain at least two values, but no upper limit exist.
@@ -96,13 +95,17 @@ const defaultLayoutParams = {
 };
 
 
-const defaultNormalLayout = 5;
-const defaultWideLayout = 0;
-const wideLayoutTreshold = 2;
+const DEFAULT_NORMAL_LAYOUT = 5;
+const DEFAULT_WIDE_LAYOUT = 0;
+const WIDE_LAYOUT_TRESHOLD = 2;
+const MIN_CELL_WIDTH = 500;
+const MIN_CELL_HEIGHT = 200;
 
 
 /** Selected layout for each desktop / screen / activity */
 const layoutSelections = {};
+
+const customizedLayouts = {};
 
 /** Client state */
 const clients = {};
@@ -144,10 +147,12 @@ const getDeskId = cli => [
 
 
 const getDefaultLayout = cli => 
-    screenSetup[cli.screen].aspectRatio > wideLayoutTreshold ? defaultWideLayout :  defaultNormalLayout;
+    screenSetup[cli.screen].aspectRatio > WIDE_LAYOUT_TRESHOLD ? DEFAULT_WIDE_LAYOUT :  DEFAULT_NORMAL_LAYOUT;
 
 
-const getLayout = cli => Object.assign({}, defaultLayoutParams, layouts[layoutSelections[getDeskId(cli)] ?? getDefaultLayout(cli)]);
+const getLayout = cli => 
+    customizedLayouts[getDeskId(cli)] ?? 
+    Object.assign({}, defaultLayoutParams, layouts[layoutSelections[getDeskId(cli)] ?? getDefaultLayout(cli)]);
 
 const limit = (val, lower, upper) => Math.max(Math.min(val, upper), lower);
 
@@ -158,6 +163,10 @@ const setBorder = cli => cli.noBorder = clients[cli].originalState.noBorder || g
 const getAppId = cli => cli.resourceName + ' ' + cli.resourceClass;
 
 const isFullScreen = cli => cli.fullScreen && clients[cli].position == '' + getPreset(cli, 'up');
+
+const clone = obj => JSON.parse(JSON.stringify(obj));
+
+const getCurrentGeometry = cli => clone(cli.frameGeometry);
 
 
 /**
@@ -346,21 +355,49 @@ const handleFullScreenChange = cli => {
     }
 };
 
+const fitEdge = (edges, idx, value, minSize) => 
+    limit(value, (edges[idx - 1] ?? -minSize) + minSize, (edges[idx + 1] ?? 1 + minSize) - minSize);
+
+
+const handleResize = cli => {
+    const maxArea = workspace.clientArea(KWin.MaximizeArea, cli);
+    const prevGeo = clients[cli].previousGeometry;
+    const curGeo = getCurrentGeometry(cli);    
+    const [left, top, right, bottom] = clients[cli].position;
+    const layout = getLayout(cli);
+    const minWidthPct = MIN_CELL_WIDTH / maxArea.width;
+    const minHeightPct = MIN_CELL_HEIGHT / maxArea.height;
+
+    const vEdges = [...layout.vEdges];
+    const hEdges = [...layout.hEdges];
+    
+    const leftChange = curGeo.x - prevGeo.x;
+    const rightChange = (curGeo.x + curGeo.width) - (prevGeo.x + prevGeo.width);
+    const topChange = curGeo.y - prevGeo.y;
+    const bottomChange = (curGeo.y + curGeo.height) - (prevGeo.y + prevGeo.height);
+
+    if (leftChange) vEdges[left] = fitEdge(vEdges, left, vEdges[left] + leftChange / maxArea.width, minWidthPct);
+    if (rightChange) vEdges[right] = fitEdge(vEdges, right, vEdges[right] + rightChange / maxArea.width, minWidthPct);
+    if (topChange) hEdges[top] = fitEdge(hEdges, top, hEdges[top] + topChange / maxArea.height, minHeightPct);
+    if (bottomChange) hEdges[bottom] = fitEdge(hEdges, bottom, hEdges[bottom] + bottomChange / maxArea.height, minHeightPct);
+
+    customizedLayouts[getDeskId(cli)] = Object.assign(layout, { vEdges, hEdges });
+    refit();    
+    clients[cli].previousGeometry = getCurrentGeometry(cli);
+};
+
 
 const initialize = cli => {
     clients[cli] = {
         cli,
-        originalState: { // Copy properties instead of reference to geometry object
-            x: cli.frameGeometry.x,
-            y: cli.frameGeometry.y,
-            width: cli.frameGeometry.width,
-            height: cli.frameGeometry.height,
+        originalState: Object.assign({
             noBorder: cli.noBorder,
             fullScreen: cli.fullScreen
-        },
+        }, getCurrentGeometry(cli)),
         previousDesktop: getDeskId(cli),
         eventListeners: {
             clientStepUserMovedResized: () => !cli.resize && untile(cli, false, true),
+            clientFinishUserMovedResized: handleResize,
             minimizedChanged: () => cascade(getDeskId(cli), clients[cli].position),
             desktopChanged: () => handleDesktopChange(cli),
             screenChanged: () => handleDesktopChange(cli),
@@ -391,6 +428,8 @@ const tile = (cli, position) => {
             if (!cli.fullScreen) appPositions[getAppId(cli)] = position;
             
             if (previousPosition && layout.cascadeIndent) cascade(deskId, previousPosition);
+
+            clients[cli].previousGeometry = getCurrentGeometry(cli);
         }
     } catch (error) {
         print('FlexGrid tile error:', error, error.stack);
@@ -422,8 +461,9 @@ const switchLayout = direction => () => {
     try {
         const deskId = getDeskId(workspace.activeClient);
         
-        layoutSelections[deskId] = (layoutSelections[deskId] || getDefaultLayout(workspace.activeClient)) + (direction === 'next' ? 1 : -1);
+        layoutSelections[deskId] = (layoutSelections[deskId] ?? getDefaultLayout(workspace.activeClient)) + (direction === 'next' ? 1 : -1);
         layoutSelections[deskId] = limit(layoutSelections[deskId], 0, layouts.length - 1);
+        delete customizedLayouts[deskId];
 
         refit(deskId);
     } catch (error) {
