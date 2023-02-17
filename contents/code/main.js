@@ -148,6 +148,8 @@ const clone = obj => JSON.parse(JSON.stringify(obj));
 
 const getCurrentGeometry = cli => clone(cli.frameGeometry);
 
+const saveCurrentGeometry = cli => clients[cli].previousGeometry = getCurrentGeometry(cli);
+
 
 /**
  * @description Force cell boundaries within grid
@@ -363,7 +365,7 @@ const handleResize = cli => {
 
     customizedLayouts[getDeskId(cli)] = Object.assign(layout, { vEdges, hEdges });
     refit();    
-    clients[cli].previousGeometry = getCurrentGeometry(cli);
+    saveCurrentGeometry(cli);
 };
 
 
@@ -409,7 +411,7 @@ const tile = (cli, position) => {
             
             if (previousPosition && layout.cascadeIndent) cascade(deskId, previousPosition);
 
-            clients[cli].previousGeometry = getCurrentGeometry(cli);
+            saveCurrentGeometry(cli);
         }
     } catch (error) {
         print('FlexGrid tile error:', error, error.stack);
@@ -433,6 +435,7 @@ const refit = deskId => {
         .forEach(({ cli, position }) => {
             setBorder(cli);
             cascade(getDeskId(cli), position);
+            saveCurrentGeometry(cli);
         });
 };
 
