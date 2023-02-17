@@ -43,36 +43,16 @@
 const layouts = [ 
     {
         vEdges: [0, 0.30, 0.70, 1],
-        hEdges: [0, 0.5, 0.75, 1],
+        hEdges: [0, 0.7, 1],
         gap: 15,
     },  
     {
-        vEdges: [0, 0.30, 0.70, 1],
-        hEdges: [0, 0.5, 0.75, 1],
-    },
-    {
         vEdges: [0, 0.25, 0.65, 1],
-        hEdges: [0, 0.5, 0.75, 1],
-    },
-    {
-        vEdges: [0, 0.25, 0.75, 1],
-        hEdges: [0, 0.5, 0.75, 1],
-    },
-    {
-        vEdges: [0, 0.21, 0.79, 1],
-        hEdges: [0, 0.5, 0.75, 1],
+        hEdges: [0, 0.7, 1],
     },
     {
         vEdges: [0, 0.4, 1],
-        hEdges: [0, 0.5, 0.7, 1],
-    },
-    {
-        vEdges: [0, 0.5, 1],
-        hEdges: [0, 0.5, 0.7, 1],
-    },
-    {
-        vEdges: [0, 0.6, 1],
-        hEdges: [0, 0.5, 0.7, 1],
+        hEdges: [0, 0.7, 1],
     },
     { // Maximize all
         vEdges: [0, 1],
@@ -88,7 +68,7 @@ const layouts = [
 const defaultLayoutParams = {
     vEdges: [0, 0.5, 1],
     hEdges: [0, 0.5, 1],
-    gap: 3,
+    gap: 4,
     cascadeIndent: 20,
     noBorder: false,
     ignore: cli => !cli.normalWindow
