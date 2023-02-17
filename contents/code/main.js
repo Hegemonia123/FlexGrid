@@ -345,8 +345,8 @@ const handleResize = cli => {
     const maxArea = workspace.clientArea(KWin.MaximizeArea, cli);
     const prevGeo = clients[cli].previousGeometry;
     const curGeo = getCurrentGeometry(cli);    
-    const [left, top, right, bottom] = clients[cli].position;
     const layout = getLayout(cli);
+    const [left, top, right, bottom] = fitPosition(clients[cli].position, layout);
     const minWidthPct = MIN_CELL_WIDTH / maxArea.width;
     const minHeightPct = MIN_CELL_HEIGHT / maxArea.height;
 
