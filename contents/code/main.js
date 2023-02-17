@@ -54,6 +54,11 @@ const layouts = [
         vEdges: [0, 0.4, 1],
         hEdges: [0, 0.7, 1],
     },
+    {
+        vEdges: [0, 0.4, 1],
+        hEdges: [0, 0.7, 1],
+        gap: 15,
+    },
     { // Maximize all
         vEdges: [0, 1],
         hEdges: [0, 1],
@@ -75,10 +80,10 @@ const defaultLayoutParams = {
 };
 
 
-const DEFAULT_NORMAL_LAYOUT = 5;
+const DEFAULT_NORMAL_LAYOUT = 2;
 const DEFAULT_WIDE_LAYOUT = 0;
-const WIDE_LAYOUT_TRESHOLD = 2;
-const MIN_CELL_WIDTH = 500;
+const WIDE_LAYOUT_TRESHOLD = 2; // Aspect ratio
+const MIN_CELL_WIDTH = 400;
 const MIN_CELL_HEIGHT = 200;
 
 
