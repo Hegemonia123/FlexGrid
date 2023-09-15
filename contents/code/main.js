@@ -126,7 +126,7 @@ refreshScreenSetup()
 const getDeskId = cli => [
     screenSetup[cli.screen].name,
     screenSetup[cli.screen].resolution,
-    cli.desktop,
+    cli.desktop === -1 ? workspace.currentDesktop : cli.desktop,
     (cli.activities.length ? cli.activities : workspace.activities)
 ].join('::');
 
@@ -434,9 +434,13 @@ const handleNewClient = cli => {
 };
 
 
-const refit = deskId => {
+const refit = ({ deskId, descNumber } = {}) => {
     Object.values(clients)
-        .filter(({ cli }) => !deskId || getDeskId(cli) === deskId)
+        .filter(({ cli }) =>
+            deskId ? getDeskId(cli) === deskId
+                : descNumber ? cli.desktop === descNumber || cli.desktop === -1
+                    : true
+        )
         .forEach(({ cli, position }) => {
             setBorder(cli);
             cascade(getDeskId(cli), position);
@@ -453,7 +457,7 @@ const switchLayout = direction => () => {
         layoutSelections[deskId] = limit(layoutSelections[deskId], 0, layouts.length - 1);
         delete customizedLayouts[deskId];
 
-        refit(deskId);
+        refit({ deskId });
     } catch (error) {
         print('FlexGrid switchLayout error:', error, error.stack);
     }
@@ -476,3 +480,4 @@ workspace.virtualScreenGeometryChanged.connect(refit);
 workspace.clientAdded.connect(handleNewClient);
 workspace.clientRemoved.connect(cli => untile(cli, true, false));
 
+workspace.currentDesktopChanged.connect(() => refit({ descNumber: workspace.currentDesktop }));

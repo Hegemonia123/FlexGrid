@@ -15,7 +15,7 @@ https://user-images.githubusercontent.com/102908263/167155213-5471ee08-e51e-441f
 - Multiple grid layouts with various slot sizes: 3x3, 4x3, 2x2...
 - Resize slot by resizing tiled window.
 - Window can cover multiple slots.
-- Select separate layout for each screen/desktop/activity.
+- Select separate layout for each screen/virtual desktop/activity.
 - Remember and restore selected layout when external monitor is plugged back in.
 - Gaps between windows.
 - Ability to hide window borders.
@@ -36,5 +36,5 @@ https://user-images.githubusercontent.com/102908263/167155213-5471ee08-e51e-441f
 
 ## Notes
 
-- Windows that are selected to be visible on all virtual desktops or multiple activities may behave unexpectedly, since they have their own grid layouts.
+- Windows that are selected to be visible on multiple activities may behave unexpectedly, since they have their own grid layouts.
 - Hotkeys conflict with the default corner tiling. You may have to remove them to make FlexGrid work.
