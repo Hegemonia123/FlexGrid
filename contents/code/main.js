@@ -51,13 +51,37 @@ const layouts = [
         hEdges: [0, 0.7, 1],
     },
     {
-        vEdges: [0, 0.4, 1],
+        vEdges: [0, 0.275, 0.725, 1],
         hEdges: [0, 0.7, 1],
     },
     {
-        vEdges: [0, 0.4, 1],
+        vEdges: [0, 0.2, 0.8, 1],
         hEdges: [0, 0.7, 1],
+    },
+    {
+        vEdges: [0, 0.3, 1],
+        hEdges: [0, 0.65, 1],
+    },
+    {
+        vEdges: [0, 0.35, 1],
+        hEdges: [0, 0.65, 1],
         gap: 15,
+    },
+    {
+        vEdges: [0, 0.4, 1],
+        hEdges: [0, 0.65, 1],
+    },
+    {
+        vEdges: [0, 0.5, 1],
+        hEdges: [0, 0.65, 1],
+    },
+    {
+        vEdges: [0, 0.6, 1],
+        hEdges: [0, 0.65, 1],
+    },
+    {
+        vEdges: [0, 0.7, 1],
+        hEdges: [0, 0.65, 1],
     },
     { // Maximize all
         vEdges: [0, 1],
@@ -73,14 +97,14 @@ const layouts = [
 const defaultLayoutParams = {
     vEdges: [0, 0.5, 1],
     hEdges: [0, 0.5, 1],
-    gap: 4,
+    gap: 3,
     cascadeIndent: 20,
     noBorder: false,
     ignore: cli => !cli.normalWindow
 };
 
 
-const DEFAULT_NORMAL_LAYOUT = 2;
+const DEFAULT_NORMAL_LAYOUT = 4;
 const DEFAULT_WIDE_LAYOUT = 0;
 const WIDE_LAYOUT_TRESHOLD = 2; // Aspect ratio
 const MIN_CELL_WIDTH = 400;
