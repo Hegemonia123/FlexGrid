@@ -369,7 +369,7 @@ const handleResize = cli => {
     if (bottomChange) hEdges[bottom] = fitEdge(hEdges, bottom, hEdges[bottom] + bottomChange / maxArea.height, minHeightPct);
 
     customizedLayouts[getDeskId(cli)] = Object.assign(layout, { vEdges, hEdges });
-    refit();    
+    refit({ deskId: getDeskId(cli) });    
     saveCurrentGeometry(cli);
 };
 
