@@ -43,7 +43,7 @@
 const layouts = [ 
     {
         vEdges: [0, 0.30, 0.70, 1],
-        hEdges: [0, 0.7, 1],
+        hEdges: [0, 0.6, 1],
         gap: 15,
     },  
     {
@@ -97,7 +97,7 @@ const layouts = [
 const defaultLayoutParams = {
     vEdges: [0, 0.5, 1],
     hEdges: [0, 0.5, 1],
-    gap: 3,
+    gap: 1,
     cascadeIndent: 20,
     noBorder: false,
     ignore: cli => !cli.normalWindow
@@ -124,39 +124,17 @@ const appPositions = {};
 
 let screenSetup = {};
 
-
-// Helpers
-const refreshScreenSetup = () => {
-    // Hacky method to parse screen configuration from supportInformation
-    screenSetup = (workspace.supportInformation().match(/Screen \d:(.|\n)+=====/)[0] || '')
-        .split(/Screen/)
-        .map(val => val.trim())
-        .filter(Boolean)
-        .reduce((res, cur) => {
-            const resolution = cur.match(/Geometry:.+\n/)[0].split(' ')[1].trim().split(',').pop();
-            const [x, y] = resolution.split('x').map(Number);
-            return Object.assign(res, {
-                [cur[0]]: {
-                    name: cur.match(/Name:.+\n/)[0].split(' ')[1].trim(),
-                    resolution,
-                    aspectRatio: x / y
-                }
-            })
-        }, {});
-}
-refreshScreenSetup()
-
-
-const getDeskId = cli => [
-    screenSetup[cli.screen].name,
-    screenSetup[cli.screen].resolution,
-    cli.desktop === -1 ? workspace.currentDesktop : cli.desktop,
-    (cli.activities.length ? cli.activities : workspace.activities)
-].join('::');
+const getDeskId = cli => {
+    return [
+        cli.output.serialNumber,
+        cli.desktop === -1 ? workspace.currentDesktop : cli.desktop,
+        (cli.activities.length ? cli.activities : workspace.activities)
+    ].join('::')
+};
 
 
 const getDefaultLayout = cli => 
-    screenSetup[cli.screen].aspectRatio > WIDE_LAYOUT_TRESHOLD ? DEFAULT_WIDE_LAYOUT :  DEFAULT_NORMAL_LAYOUT;
+    cli.output.geometry.width / cli.output.geometry.height > WIDE_LAYOUT_TRESHOLD ? DEFAULT_WIDE_LAYOUT :  DEFAULT_NORMAL_LAYOUT;
 
 
 const getLayout = cli => 
@@ -165,26 +143,12 @@ const getLayout = cli =>
 
 const limit = (val, lower, upper) => Math.max(Math.min(val, upper), lower);
 
-const getCascadeId = (cli, position) => fitPosition(position, getLayout(cli)).slice(0, 3).join(';');
-
-const setBorder = cli => cli.noBorder = clients[cli].originalState.noBorder || getLayout(cli).noBorder || false;
-
-const getAppId = cli => cli.resourceName + ' ' + cli.resourceClass;
-
-const isFullScreen = cli => cli.fullScreen && clients[cli].position == '' + getPreset(cli, 'up');
-
-const clone = obj => JSON.parse(JSON.stringify(obj));
-
-const getCurrentGeometry = cli => clone(cli.frameGeometry);
-
-const saveCurrentGeometry = cli => clients[cli].previousGeometry = getCurrentGeometry(cli);
-
 
 /**
  * @description Force cell boundaries within grid
  * @param {number[]} position
  * @param {Object} layout 
- */
+*/
 const fitPosition = ([left, top, right, bottom], layout) => {
     left = limit(left, 0, layout.vEdges.length - 2);
     right = limit(right, 1, layout.vEdges.length - 1);
@@ -199,7 +163,7 @@ const fitPosition = ([left, top, right, bottom], layout) => {
  * @param {AbstractClient} cli 
  * @param {'right'|'left'|'up'|'down'} direction 
  * @returns {number[]} Preconfigured starting position
- */
+*/
 const getPreset = (cli, direction) => {
     const layout = getLayout(cli);
     switch (direction) {
@@ -209,6 +173,20 @@ const getPreset = (cli, direction) => {
         case 'down': return [0, layout.hEdges.length - 2, layout.vEdges.length - 1, layout.hEdges.length - 1];
     }
 };
+
+const getCascadeId = (cli, position) => fitPosition(position, getLayout(cli)).slice(0, 3).join(';');
+
+const setBorder = cli => cli.noBorder = clients[cli].originalState.noBorder || getLayout(cli).noBorder || false;
+
+const getAppId = cli => cli.resourceName + ' ' + cli.resourceClass;
+
+const isFullScreen = cli => cli.fullScreen && clients[cli].position == '' + getPreset(cli, 'up');
+
+const clone = obj => JSON.parse(JSON.stringify(obj));
+
+const getCurrentGeometry = cli => clone(cli.frameGeometry);
+
+const saveCurrentGeometry = cli => clients[cli].previousGeometry = getCurrentGeometry(cli);
 
 
 /**
@@ -258,6 +236,52 @@ const clearState = (cli, forgetAppPosition) => {
 
 
 /**
+ * @param {AbstractClient} cli 
+ * @param {number} cascadeIdx
+ * @param {number} cascadeLength
+ * @returns {QRect} Geometry
+ */
+const getGeometry = (cli, cascadeIdx, cascadeLength) => {
+    const layout = getLayout(cli);
+    const position = fitPosition(clients[cli].position, layout);
+
+    // Make window actually fullscreen if it is a "fullScreen" window covering the whole grid
+    if (isFullScreen(cli))
+        return workspace.clientArea(KWin.FullScreenArea, cli);
+
+    let [left, top, right, bottom] = position;
+    const maxArea = workspace.clientArea(KWin.MaximizeArea, cli);
+
+    const x = maxArea.x + Math.round(layout.vEdges[left] * maxArea.width) + layout.gap * (left === 0 ? 2 : 1) + cascadeIdx * layout.cascadeIndent;
+    const y = maxArea.y + Math.round(layout.hEdges[top] * maxArea.height) + layout.gap * (top === 0 ? 2 : 1) + cascadeIdx * layout.cascadeIndent;
+
+    const width = maxArea.x + Math.round(layout.vEdges[right] * maxArea.width) - x - layout.gap * (right === layout.vEdges.length - 1 ? 2 : 1) - (cascadeLength - cascadeIdx - 1) * layout.cascadeIndent;
+    const height = maxArea.y + Math.round(layout.hEdges[bottom] * maxArea.height) - y - layout.gap * (bottom === layout.hEdges.length - 1 ? 2 : 1) - (cascadeLength - cascadeIdx - 1) * layout.cascadeIndent;
+
+    return { x, y, width, height };
+};
+
+
+const cascade = (deskId, cascadePos) => {
+    const clis = Object.values(clients)
+        .filter(({ cli, position }) =>
+            !cli.minimized &&
+            getDeskId(cli) === deskId
+            && getCascadeId(cli, position) === getCascadeId(cli, cascadePos)
+        )
+        .map(({ cli }) => cli)
+
+    // Cascaded windows
+    clis.filter(cli => !isFullScreen(cli))
+        .forEach((cli, idx, cascadeClis) => cli.frameGeometry = getGeometry(cli, idx, cascadeClis.length));
+
+    // Actual fullScreen windows. Not cascaded.
+    clis.filter(isFullScreen)
+        .forEach(cli => cli.frameGeometry = getGeometry(cli, 0, 1));
+};
+
+
+/**
  * 
  * @param {AbstractClient} cli 
  * @param {boolean} restorePosition - Restore also position in addition to size
@@ -283,53 +307,6 @@ const untile = (cli, restorePosition, forgetAppPosition) => {
         clearState(cli, forgetAppPosition);
         cascade(getDeskId(cli), position)
     }
-};
-
-
-/**
- * @param {AbstractClient} cli 
- * @param {number} cascadeIdx
- * @param {number} cascadeLength
- * @returns {QRect} Geometry
- */
-const getGeometry = (cli, cascadeIdx, cascadeLength) => {
-    const layout = getLayout(cli);
-    const position = fitPosition(clients[cli].position, layout);
-    
-    // Make window actually fullscreen if it is a "fullScreen" window covering the whole grid
-    if (isFullScreen(cli)) 
-        return workspace.clientArea(KWin.FullScreenArea, cli);
-
-    let [left, top, right, bottom] = position;
-    const maxArea = workspace.clientArea(KWin.MaximizeArea, cli);
-
-    const x = maxArea.x + Math.round(layout.vEdges[left] * maxArea.width) + layout.gap * (left === 0 ? 2 : 1) + cascadeIdx * layout.cascadeIndent;
-    const y = maxArea.y + Math.round(layout.hEdges[top] * maxArea.height) + layout.gap * (top === 0 ? 2 : 1) + cascadeIdx * layout.cascadeIndent;
-
-    const width = maxArea.x + Math.round(layout.vEdges[right] * maxArea.width) - x - layout.gap * (right === layout.vEdges.length - 1 ? 2 : 1) - (cascadeLength - cascadeIdx - 1) * layout.cascadeIndent;
-    const height = maxArea.y + Math.round(layout.hEdges[bottom] * maxArea.height) - y - layout.gap * (bottom === layout.hEdges.length - 1 ? 2 : 1) - (cascadeLength - cascadeIdx - 1) * layout.cascadeIndent;
-
-    return { x, y, width, height };
-};
-
-
-const cascade = (deskId, cascadePos) => {
-    const clis = Object.values(clients)
-        .filter(({ cli, position }) =>
-            !cli.minimized &&
-            cli.screen >= 0 && // When screen is unplugged some clients get negative screen values. Ignore them.
-            getDeskId(cli) === deskId
-            && getCascadeId(cli, position) === getCascadeId(cli, cascadePos)
-        )
-        .map(({ cli }) => cli)
-
-    // Cascaded windows
-    clis.filter(cli => !isFullScreen(cli))
-        .forEach((cli, idx, cascadeClis) => cli.frameGeometry = getGeometry(cli, idx, cascadeClis.length));
-
-    // Actual fullScreen windows. Not cascaded.
-    clis.filter(isFullScreen)
-        .forEach(cli => cli.frameGeometry = getGeometry(cli, 0, 1));
 };
 
 
@@ -370,6 +347,21 @@ const fitEdge = (edges, idx, value, minSize) =>
     limit(value, (edges[idx - 1] ?? -minSize) + minSize, (edges[idx + 1] ?? 1 + minSize) - minSize);
 
 
+const refit = ({ deskId, descNumber } = {}) => {
+    Object.values(clients)
+        .filter(({ cli }) =>
+            deskId ? getDeskId(cli) === deskId
+                : descNumber ? cli.desktop === descNumber || cli.desktop === -1
+                    : true
+        )
+        .forEach(({ cli, position }) => {
+            setBorder(cli);
+            cascade(getDeskId(cli), position);
+            saveCurrentGeometry(cli);
+        });
+};
+
+
 const handleResize = cli => {
     const maxArea = workspace.clientArea(KWin.MaximizeArea, cli);
     const prevGeo = clients[cli].previousGeometry;
@@ -407,13 +399,13 @@ const initialize = cli => {
         }, getCurrentGeometry(cli)),
         previousDesktop: getDeskId(cli),
         eventListeners: {
-            clientStepUserMovedResized: () => !cli.resize && untile(cli, false, true),
-            clientFinishUserMovedResized: handleResize,
+            interactiveMoveResizeStepped: () => !cli.resize && untile(cli, false, true),
+            interactiveMoveResizeFinished: () => handleResize(cli),
             minimizedChanged: () => cascade(getDeskId(cli), clients[cli].position),
-            desktopChanged: () => handleDesktopChange(cli),
-            screenChanged: () => handleDesktopChange(cli),
+            desktopsChanged: () => handleDesktopChange(cli),
+            outputChanged: () => handleDesktopChange(cli),
             fullScreenChanged: () => handleFullScreenChange(cli),
-            clientMaximizedStateChanged: () => clearState(cli),
+            maximizedChanged: () => clearState(cli),
         }
     };
     setBorder(cli);
@@ -448,8 +440,8 @@ const tile = (cli, position) => {
 };
 
 
-const move = direction => () => 
-    tile(workspace.activeClient, getNewPosition(workspace.activeClient, direction));
+const move = direction => () =>
+    tile(workspace.activeWindow, getNewPosition(workspace.activeWindow, direction));
 
 
 const handleNewClient = cli => {
@@ -458,26 +450,11 @@ const handleNewClient = cli => {
 };
 
 
-const refit = ({ deskId, descNumber } = {}) => {
-    Object.values(clients)
-        .filter(({ cli }) =>
-            deskId ? getDeskId(cli) === deskId
-                : descNumber ? cli.desktop === descNumber || cli.desktop === -1
-                    : true
-        )
-        .forEach(({ cli, position }) => {
-            setBorder(cli);
-            cascade(getDeskId(cli), position);
-            saveCurrentGeometry(cli);
-        });
-};
-
-
 const switchLayout = direction => () => {
     try {
-        const deskId = getDeskId(workspace.activeClient);
+        const deskId = getDeskId(workspace.activeWindow);
         
-        layoutSelections[deskId] = (layoutSelections[deskId] ?? getDefaultLayout(workspace.activeClient)) + (direction === 'next' ? 1 : -1);
+        layoutSelections[deskId] = (layoutSelections[deskId] ?? getDefaultLayout(workspace.activeWindow)) + (direction === 'next' ? 1 : -1);
         layoutSelections[deskId] = limit(layoutSelections[deskId], 0, layouts.length - 1);
         delete customizedLayouts[deskId];
 
@@ -496,12 +473,11 @@ registerShortcut("FlexGridMoveDown", "FlexGrid: Move Window down", "Meta+Down", 
 registerShortcut("FlexGridNextLayout", "FlexGrid: Next layout", "Meta+Ctrl+Right", switchLayout('next'));
 registerShortcut("FlexGridPreviousLayout", "FlexGrid: Previous layout", "Meta+Ctrl+Left", switchLayout('prev'));
 
-registerShortcut("FlexGridUntile", "FlexGrid: Untile", "Meta+end", () => untile(workspace.activeClient, true, true));
+registerShortcut("FlexGridUntile", "FlexGrid: Untile", "Meta+end", () => untile(workspace.activeWindow, true, true));
 
-workspace.virtualScreenGeometryChanged.connect(refreshScreenSetup);
 workspace.virtualScreenGeometryChanged.connect(refit);
 
-workspace.clientAdded.connect(handleNewClient);
-workspace.clientRemoved.connect(cli => untile(cli, true, false));
+workspace.windowAdded.connect(handleNewClient);
+workspace.windowRemoved.connect(cli => untile(cli, true, false));
 
 workspace.currentDesktopChanged.connect(() => refit({ descNumber: workspace.currentDesktop }));

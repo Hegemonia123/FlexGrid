@@ -1,0 +1,20 @@
+{
+    "KPlugin": {
+        "Name": "FlexGrid",
+        "Description": "Configurable window tiling",
+        "Icon": "preferences-system-windows",
+        "Authors": [
+            {
+                "Email": "hegeh123@outlook.com  ",
+                "Name": "Hegemonia"
+            }
+        ],
+        "Id": "flexgrid",
+        "Version": "3.0",
+        "License": "GPL",
+        "Website": "https://github.com/Hegemonia123/FlexGrid"
+    },
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js",
+    "KPackageStructure": "KWin/Script"
+}

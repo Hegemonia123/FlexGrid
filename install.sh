@@ -1,14 +1,13 @@
 #!/bin/bash
 
-if [[ `kpackagetool5 -l | grep "flexGrid"` ]]; then
+if [[ `kpackagetool6 -l --type=KWin/Script | grep "flexgrid"` ]]; then
     echo "Updating..."
-    kpackagetool5 --type=KWin/Script -u .
-    kwriteconfig5 --file kwinrc --group Plugins --key flexGridEnabled false
+    kpackagetool6 --type=KWin/Script -u .
+    kwriteconfig6 --file kwinrc --group Plugins --key flexGridEnabled false
     qdbus org.kde.KWin /KWin reconfigure
-    sleep 1;
-    kwriteconfig5 --file kwinrc --group Plugins --key flexGridEnabled true
+    kwriteconfig6 --file kwinrc --group Plugins --key flexGridEnabled true
     qdbus org.kde.KWin /KWin reconfigure
 else
     echo "Installing..."
-    kpackagetool5 --type=KWin/Script -i .
+    kpackagetool6 --type=KWin/Script -i .
 fi
