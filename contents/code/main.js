@@ -124,10 +124,11 @@ const appPositions = {};
 
 let screenSetup = {};
 
+/** Create identifier for the current output + virtual desktop + activity of the client */
 const getDeskId = cli => {
     return [
         cli.output.serialNumber,
-        cli.desktop === -1 ? workspace.currentDesktop : cli.desktop,
+        cli.desktops.length ? cli.desktops : workspace.currentDesktop,
         (cli.activities.length ? cli.activities : workspace.activities)
     ].join('::')
 };
@@ -347,11 +348,11 @@ const fitEdge = (edges, idx, value, minSize) =>
     limit(value, (edges[idx - 1] ?? -minSize) + minSize, (edges[idx + 1] ?? 1 + minSize) - minSize);
 
 
-const refit = ({ deskId, descNumber } = {}) => {
+const refit = ({ deskId, virtDeskId } = {}) => {
     Object.values(clients)
         .filter(({ cli }) =>
             deskId ? getDeskId(cli) === deskId
-                : descNumber ? cli.desktop === descNumber || cli.desktop === -1
+                : virtDeskId ? cli.desktops.includes(virtDeskId) || !cli.desktops.length
                     : true
         )
         .forEach(({ cli, position }) => {
@@ -480,4 +481,4 @@ workspace.virtualScreenGeometryChanged.connect(refit);
 workspace.windowAdded.connect(handleNewClient);
 workspace.windowRemoved.connect(cli => untile(cli, true, false));
 
-workspace.currentDesktopChanged.connect(() => refit({ descNumber: workspace.currentDesktop }));
+workspace.currentDesktopChanged.connect(() => refit({ virtDeskId: workspace.currentDesktop }));
