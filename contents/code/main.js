@@ -100,7 +100,7 @@ const defaultLayoutParams = {
     gap: 1,
     cascadeIndent: 20,
     noBorder: false,
-    ignore: cli => !cli.normalWindow
+    ignore: cli => !cli.normalWindow || !cli.moveable || !cli.resizeable || cli.specialWindow || cli.transient
 };
 
 
@@ -286,9 +286,8 @@ const cascade = (deskId, cascadePos) => {
  * 
  * @param {AbstractClient} cli 
  * @param {boolean} restorePosition - Restore also position in addition to size
- * @param {boolean} forgetAppPosition - If true, the next time app will open untiled. false will open it to the same cell.
  */
-const untile = (cli, restorePosition, forgetAppPosition) => {
+const restoreGeometry = (cli, restorePosition) => {
     if (clients[cli]) {
         // Resize to fit the screen area, because screen may have been changed after tiling started.
         let { x, y, width, height, fullScreen, noBorder } = clients[cli].originalState;
@@ -303,7 +302,17 @@ const untile = (cli, restorePosition, forgetAppPosition) => {
             fullScreen,
             frameGeometry: Object.assign({ width, height }, restorePosition ? { x, y } : {})
         });
+    }
+};
 
+
+/**
+ * 
+ * @param {AbstractClient} cli 
+ * @param {boolean} forgetAppPosition - If true, the next time app will open untiled. false will open it to the same cell.
+ */
+const untile = (cli, forgetAppPosition) => {
+    if (clients[cli]) {
         const position = clients[cli].position;
         clearState(cli, forgetAppPosition);
         cascade(getDeskId(cli), position)
@@ -400,7 +409,12 @@ const initialize = cli => {
         }, getCurrentGeometry(cli)),
         previousDesktop: getDeskId(cli),
         eventListeners: {
-            interactiveMoveResizeStepped: () => !cli.resize && untile(cli, false, true),
+            interactiveMoveResizeStepped: () => {
+                if(!cli.resize) {
+                    restoreGeometry(cli, false); 
+                    untile(cli, true);
+                }
+            },
             interactiveMoveResizeFinished: () => handleResize(cli),
             minimizedChanged: () => cascade(getDeskId(cli), clients[cli].position),
             desktopsChanged: () => handleDesktopChange(cli),
@@ -474,11 +488,14 @@ registerShortcut("FlexGridMoveDown", "FlexGrid: Move Window down", "Meta+Down", 
 registerShortcut("FlexGridNextLayout", "FlexGrid: Next layout", "Meta+Ctrl+Right", switchLayout('next'));
 registerShortcut("FlexGridPreviousLayout", "FlexGrid: Previous layout", "Meta+Ctrl+Left", switchLayout('prev'));
 
-registerShortcut("FlexGridUntile", "FlexGrid: Untile", "Meta+end", () => untile(workspace.activeWindow, true, true));
+registerShortcut("FlexGridUntile", "FlexGrid: Untile", "Meta+end", () => {
+    restoreGeometry(workspace.activeWindow, true)
+    untile(workspace.activeWindow, true)
+});
 
 workspace.virtualScreenGeometryChanged.connect(refit);
 
 workspace.windowAdded.connect(handleNewClient);
-workspace.windowRemoved.connect(cli => untile(cli, true, false));
+workspace.windowRemoved.connect(cli => untile(cli, false)); // Geometry cannot be restored as it messes up window close animation in Plasma 6
 
 workspace.currentDesktopChanged.connect(() => refit({ virtDeskId: workspace.currentDesktop }));
